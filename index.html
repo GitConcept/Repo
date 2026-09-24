@@ -80,6 +80,7 @@
   .ex.selected { border-color: var(--green); background: #10261a; }
   .ex.selected .num { background: var(--green); color: #fff; }
   .ex.done { opacity: .45; }
+  .ex.done.selected { opacity: .85; }
   .ex.done .num { background: var(--orange); color: #fff; }
 
   .cta-wrap { position: fixed; left: 0; right: 0; bottom: 0; padding: 14px 20px calc(18px + env(safe-area-inset-bottom));
@@ -215,7 +216,9 @@ function selectExercise(i) { const s = session(view.workoutId); s.selected = i; 
 function startExercise() {
   const s = session(view.workoutId);
   unlockAudio();
-  s.live = { i: s.selected, phase: "work", phaseStart: Date.now(), restEnd: null, workAccum: 0 };
+  const i = s.selected;
+  delete s.done[i]; // retomar exercício concluído: continua de onde parou
+  s.live = { i, phase: "work", phaseStart: Date.now(), restEnd: null, workAccum: s.times[i] || 0 };
   save(); render();
 }
 function finishSet() {
@@ -303,7 +306,8 @@ function renderWorkout() {
   const w = current(), s = session(w.id), list = flat(w);
   const allDone = list.every((_, i) => s.done[i]);
   let idx = 0;
-  const sel = s.selected != null && !s.done[s.selected] ? list[s.selected] : null;
+  const sel = s.selected != null ? list[s.selected] : null;
+  const resume = sel && s.done[s.selected];
   app.innerHTML = `
     <div class="top">
       <button class="icon-btn" onclick="goHome()" aria-label="Voltar">‹</button>
@@ -320,7 +324,7 @@ function renderWorkout() {
         <div class="group">${esc(g.name)}</div>
         ${g.exercises.map(e => {
           const i = idx++;
-          const cls = s.done[i] ? "done" : s.selected === i ? "selected" : "";
+          const cls = [s.done[i] && "done", s.selected === i && "selected"].filter(Boolean).join(" ");
           const n = s.setsDone[i] || 0;
           const extra = s.done[i] ? ` · ✓ ${n} série${n === 1 ? "" : "s"}${s.times[i] ? ` · ${fmt(s.times[i])}` : ""}` : "";
           return `<div class="ex ${cls}" onclick="selectExercise(${i})">
@@ -334,7 +338,7 @@ function renderWorkout() {
         }).join("")}`).join("")}
       ${allDone ? `<div class="finished">🎉 Treino concluído!<br><button class="link-btn" onclick="resetWorkout()">Zerar para a próxima vez</button></div>` : ""}
     </main>
-    ${sel ? `<div class="cta-wrap"><button class="cta" onclick="startExercise()">Iniciar exercício<small>${esc(sel.name)}</small></button></div>`
+    ${sel ? `<div class="cta-wrap"><button class="cta" onclick="startExercise()">${resume ? "Retomar exercício" : "Iniciar exercício"}<small>${esc(sel.name)}</small></button></div>`
          : allDone ? "" : `<div class="cta-wrap"><button class="cta ghost" disabled>Selecione um exercício</button></div>`}`;
 }
 
