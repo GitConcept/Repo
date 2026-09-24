@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#12142a">
+<title>Meus Treinos</title>
+<style>
+  :root {
+    --bg: #0f1020; --card: #1b1d33; --card2: #24274a; --text: #f3f4f8; --muted: #9aa0b8;
+    --green: #1fa855; --green-bg: #12351f; --red: #e0342b; --red-bg: #3d1413; --done: #3a3d5c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  header { padding: 20px 16px 12px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 22px; margin: 0; flex: 1; }
+  .back { background: none; border: 0; color: var(--text); font-size: 26px; padding: 0 6px; cursor: pointer; }
+  main { padding: 0 16px 140px; max-width: 640px; margin: 0 auto; }
+  .workout-card { display: block; width: 100%; text-align: left; border: 0; border-radius: 16px;
+    padding: 22px 18px; margin-bottom: 14px; color: #fff; cursor: pointer; font: inherit; }
+  .workout-card .letter { font-size: 14px; opacity: .85; font-weight: 600; letter-spacing: 1px; }
+  .workout-card .title { font-size: 22px; font-weight: 800; margin: 4px 0; }
+  .workout-card .meta { font-size: 14px; opacity: .85; }
+  .group { font-size: 13px; font-weight: 800; letter-spacing: 1px; margin: 22px 0 8px; color: var(--muted); }
+  .ex { background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    border: 3px solid transparent; cursor: pointer; transition: background .2s, border-color .2s; }
+  .ex .row { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .ex .name { font-weight: 700; font-size: 17px; }
+  .ex .sets { color: #6fb3ff; margin-top: 4px; }
+  .ex .note { color: var(--muted); font-style: italic; font-size: 14px; margin-top: 4px; }
+  .ex .weight { font-weight: 800; white-space: nowrap; font-size: 15px; }
+  .ex.selected { border-color: var(--green); background: var(--green-bg); }
+  .ex.resting { border-color: var(--red); background: var(--red-bg); }
+  .ex.done { opacity: .55; background: var(--done); }
+  .ex.done .name::before { content: "✓ "; color: var(--green); }
+  .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
+    background: var(--card2); margin-top: 8px; }
+  .panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card);
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 4px solid var(--green);
+    box-shadow: 0 -8px 24px rgba(0,0,0,.4); }
+  .panel.resting { border-top-color: var(--red); }
+  .panel-inner { max-width: 640px; margin: 0 auto; }
+  .panel .pname { font-weight: 700; font-size: 16px; }
+  .panel .pinfo { color: var(--muted); font-size: 14px; margin: 2px 0 12px; }
+  .timer { font-size: 48px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; color: var(--red); margin-bottom: 8px; }
+  .timer.go { color: var(--green); }
+  .btns { display: flex; gap: 10px; }
+  .btn { flex: 1; border: 0; border-radius: 12px; padding: 16px 10px; font-size: 16px; font-weight: 800;
+    color: #fff; cursor: pointer; font-family: inherit; }
+  .btn:disabled { opacity: .4; }
+  .btn.green { background: var(--green); }
+  .btn.red { background: var(--red); }
+  .btn.grey { background: var(--card2); }
+  .reset { background: none; border: 1px solid var(--muted); color: var(--muted); border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  .finished { text-align: center; padding: 20px; color: var(--green); font-weight: 800; font-size: 18px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const REST_SECONDS = 60;
+
+const WORKOUTS = [
+  { id: "A", title: "Peito + Tríceps", color: "#c9302c", groups: [
+    { name: "PEITO", exercises: [
+      { name: "Supino reto com barra", sets: 4, reps: "6–8", note: "Base de força", weight: "20 - 20 kg" },
+      { name: "Supino inclinado com halteres", sets: 3, reps: "8–10", note: "Halteres > barra no inclinado", weight: "22 - 22 kg" },
+      { name: "Peck deck / Crucifixo", sets: 3, reps: "12–15", note: "Finalização — pico de contração", weight: "60 kg" },
+      { name: "Crossover na polia (baixo pra cima)", sets: 3, reps: "12–15", note: "Porção inferior + alongamento profundo", weight: "15 - 15 kg" },
+    ]},
+    { name: "TRÍCEPS", exercises: [
+      { name: "Francês na polia (corda ou barra reta)", sets: 3, reps: "10–12", note: "Cabeça longa · tensão constante · fundamental pra massa", weight: "— kg" },
+      { name: "Bi-set: Corda + Barra reta na polia", sets: 3, reps: "12–15", note: "Sem descanso entre os dois · descansa depois", weight: "20 - 20 kg" },
+    ]},
+  ]},
+  { id: "B", title: "Costas + Bíceps", color: "#1d4f7a", groups: [
+    { name: "COSTAS", exercises: [
+      { name: "Puxada frontal", sets: 4, reps: "8–10", note: "Largura · puxada vertical", weight: "55 kg" },
+      { name: "Remada baixa no cabo", sets: 4, reps: "8–10", note: "Espessura de costas", weight: "50 kg" },
+      { name: "Remada unilateral com haltere", sets: 3, reps: "10–12", note: "Amplitude maior · ativação do grande dorsal", weight: "22 kg" },
+      { name: "Pullover na polia ou haltere", sets: 3, reps: "12–15", note: "Isolamento do grande dorsal", weight: "40 kg / H 24 kg" },
+    ]},
+    { name: "BÍCEPS", exercises: [
+      { name: "Rosca direta com barra", sets: 3, reps: "8–10", note: "Bíceps braquial — pico e comprimento", weight: "5 - 5 kg" },
+      { name: "Rosca martelo", sets: 3, reps: "10–12", note: "Braquial + braquiorradial", weight: "10 - 10 kg" },
+      { name: "Rosca scott", sets: 3, reps: "12–15", note: "Isolamento total — elimina trapaça", weight: "5 - 5 kg" },
+    ]},
+  ]},
+  { id: "C", title: "Inferiores", color: "#127a3a", groups: [
+    { name: "QUADRÍCEPS", exercises: [
+      { name: "Agachamento livre ou Hack squat", sets: 4, reps: "6–8", note: "Composto base — insubstituível", weight: "50 - 50 kg" },
+      { name: "Leg press 45°", sets: 4, reps: "10–12", note: "Volume complementar ao agacho", weight: "90 - 90 kg" },
+      { name: "Extensora", sets: 3, reps: "15–20", note: "Isolamento de finalização", weight: "70 kg" },
+    ]},
+    { name: "POSTERIOR DE COXA", exercises: [
+      { name: "Stiff com barra", sets: 4, reps: "8–10", note: "Base de força — essencial", weight: "20 - 20 kg" },
+      { name: "Mesa flexora (leg curl deitado)", sets: 3, reps: "10–12", note: "Quadril estendido = maior alongamento do posterior", weight: "— kg" },
+    ]},
+    { name: "PANTURRILHA", exercises: [
+      { name: "Panturrilha em pé na máquina", sets: 4, reps: "15–20", note: "Gastrocnêmio — maior e mais visível", weight: "180 kg (leg press)" },
+    ]},
+  ]},
+];
+
+// ---- State ----
+// session per workout: { selected: idx|null, started: bool, setsDone: {idx: n}, done: {idx: true}, restEnd: ms|null }
+let view = { workoutId: null };
+let sessions = load() || {};
+let tick = null;
+
+function load() { try { return JSON.parse(localStorage.getItem("treinos-sessions")); } catch { return null; } }
+function save() { try { localStorage.setItem("treinos-sessions", JSON.stringify(sessions)); } catch {} }
+function session(id) {
+  return sessions[id] ||= { selected: null, started: false, setsDone: {}, done: {}, restEnd: null };
+}
+function flatExercises(w) { return w.groups.flatMap(g => g.exercises); }
+function resting(s) { return s.restEnd && s.restEnd > Date.now(); }
+
+// ---- Feedback when rest ends ----
+let audioCtx;
+function beep() {
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.25, 0.5].forEach(t => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.3, audioCtx.currentTime + t);
+      o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + 0.15);
+    });
+  } catch {}
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+}
+
+// ---- Actions ----
+function openWorkout(id) { view.workoutId = id; render(); }
+function goHome() { view.workoutId = null; render(); }
+
+function selectExercise(i) {
+  const s = session(view.workoutId);
+  if (s.started && s.selected !== i) {
+    if (!confirm("Há um exercício em andamento. Trocar de exercício?")) return;
+    s.started = false; s.restEnd = null;
+  }
+  s.selected = i; save(); render();
+}
+function startExercise() {
+  const s = session(view.workoutId);
+  s.started = true; s.restEnd = null; unlockAudio(); save(); render();
+}
+function finishSet() {
+  const s = session(view.workoutId);
+  s.setsDone[s.selected] = (s.setsDone[s.selected] || 0) + 1;
+  s.restEnd = Date.now() + REST_SECONDS * 1000;
+  save(); render();
+}
+function skipRest() {
+  const s = session(view.workoutId); s.restEnd = null; save(); render();
+}
+function finishExercise() {
+  const w = WORKOUTS.find(x => x.id === view.workoutId);
+  const s = session(w.id), list = flatExercises(w);
+  s.done[s.selected] = true; s.started = false; s.restEnd = null;
+  // Next exercise not yet done
+  let next = null;
+  for (let k = 1; k <= list.length; k++) {
+    const j = (s.selected + k) % list.length;
+    if (!s.done[j]) { next = j; break; }
+  }
+  s.selected = next; save(); render();
+}
+function resetWorkout() {
+  if (!confirm("Zerar o progresso deste treino?")) return;
+  delete sessions[view.workoutId]; save(); render();
+}
+function unlockAudio() {
+  try { audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch {}
+}
+
+// ---- Render ----
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const app = document.getElementById("app");
+
+function render() {
+  clearInterval(tick); tick = null;
+  if (!view.workoutId) return renderHome();
+  renderWorkout();
+}
+
+function renderHome() {
+  document.body.style.setProperty("--accent", "");
+  app.innerHTML = `
+    <header><h1>💪 Meus Treinos</h1></header>
+    <main>
+      ${WORKOUTS.map(w => {
+        const total = flatExercises(w).length, done = Object.keys(session(w.id).done).length;
+        return `<button class="workout-card" style="background:${w.color}" onclick="openWorkout('${w.id}')">
+          <div class="letter">TREINO ${w.id}</div>
+          <div class="title">${esc(w.title)}</div>
+          <div class="meta">${total} exercícios${done ? ` · ${done}/${total} concluídos` : ""}</div>
+        </button>`;
+      }).join("")}
+    </main>`;
+}
+
+function renderWorkout() {
+  const w = WORKOUTS.find(x => x.id === view.workoutId);
+  const s = session(w.id);
+  const isResting = resting(s);
+  if (s.restEnd && !isResting) { s.restEnd = null; save(); }
+  let idx = 0;
+  const list = flatExercises(w);
+  const allDone = list.every((_, i) => s.done[i]);
+
+  app.innerHTML = `
+    <header style="background:${w.color}">
+      <button class="back" onclick="goHome()" aria-label="Voltar">‹</button>
+      <h1>Treino ${w.id} — ${esc(w.title)}</h1>
+      <button class="reset" style="color:#fff;border-color:#fff" onclick="resetWorkout()">Zerar</button>
+    </header>
+    <main>
+      ${w.groups.map(g => `
+        <div class="group">${esc(g.name)}</div>
+        ${g.exercises.map(e => {
+          const i = idx++;
+          let cls = "";
+          if (s.done[i]) cls = "done";
+          else if (s.selected === i) cls = isResting ? "resting" : "selected";
+          const n = s.setsDone[i] || 0;
+          return `<div class="ex ${cls}" onclick="selectExercise(${i})">
+            <div class="row">
+              <div>
+                <div class="name">${esc(e.name)}</div>
+                <div class="sets">${e.sets} séries × ${e.reps} reps</div>
+                <div class="note">${esc(e.note)}</div>
+                ${n ? `<span class="badge">${n} série${n > 1 ? "s" : ""} feita${n > 1 ? "s" : ""}</span>` : ""}
+              </div>
+              <div class="weight">${esc(e.weight)}</div>
+            </div>
+          </div>`;
+        }).join("")}
+      `).join("")}
+      ${allDone ? `<div class="finished">🎉 Treino concluído!</div>` : ""}
+    </main>
+    ${renderPanel(list, s, isResting)}`;
+
+  if (isResting) {
+    tick = setInterval(() => {
+      const left = Math.ceil((s.restEnd - Date.now()) / 1000);
+      const el = document.getElementById("timer");
+      if (left <= 0) { beep(); s.restEnd = null; save(); render(); return; }
+      if (el) el.textContent = fmt(left);
+    }, 250);
+  }
+}
+
+function renderPanel(list, s, isResting) {
+  if (s.selected == null || s.done[s.selected]) return "";
+  const e = list[s.selected], n = s.setsDone[s.selected] || 0;
+  const info = `Série ${n + (isResting ? 0 : 1)} · meta ${e.sets} × ${e.reps} · ${esc(e.weight)}`;
+  let body;
+  if (!s.started) {
+    body = `<div class="btns"><button class="btn green" onclick="startExercise()">▶ Iniciar exercício</button></div>`;
+  } else if (isResting) {
+    const left = Math.ceil((s.restEnd - Date.now()) / 1000);
+    body = `<div class="timer" id="timer">${fmt(left)}</div>
+      <div class="btns">
+        <button class="btn grey" onclick="skipRest()">Pular descanso</button>
+        <button class="btn grey" onclick="finishExercise()">Concluir exercício</button>
+      </div>`;
+  } else {
+    body = `<div class="btns">
+        <button class="btn green" onclick="finishSet()">✓ Série concluída</button>
+        <button class="btn grey" onclick="finishExercise()">Concluir exercício</button>
+      </div>`;
+  }
+  return `<div class="panel ${isResting ? "resting" : ""}"><div class="panel-inner">
+    <div class="pname">${esc(e.name)}</div>
+    <div class="pinfo">${isResting ? `Descansando · ${n} série${n > 1 ? "s" : ""} feita${n > 1 ? "s" : ""}` : info}</div>
+    ${body}
+  </div></div>`;
+}
+
+const fmt = sec => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+
+// Re-render when returning to the app (timer based on timestamps, survives background)
+document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+render();
+</script>
+</body>
+</html>
