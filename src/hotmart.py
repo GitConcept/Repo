@@ -55,8 +55,8 @@ def _ensure_logged_in(page: Page, url: str):
     O robô não preenche login nem verificação: quem entra é você, uma vez. O perfil do
     navegador fica salvo no Mac, então nas próximas execuções a sessão já está aberta.
     """
-    page.goto(url)
-    page.wait_for_load_state("networkidle")
+    page.goto(url, wait_until="domcontentloaded")
+    page.wait_for_timeout(5000)
     if not _needs_human(page):
         return
     print("A Hotmart pediu login/verificação. Entre na Hotmart na janela do navegador aberta no Mac.")
@@ -69,8 +69,7 @@ def _ensure_logged_in(page: Page, url: str):
         timeout=LOGIN_WAIT_MS,
         polling=5000,
     )
-    page.goto(url)
-    page.wait_for_load_state("networkidle")
+    page.goto(url, wait_until="domcontentloaded")
     _shot(page, "01-logado")
 
 
@@ -103,9 +102,9 @@ def _open_new_lesson(page: Page):
 
 
 def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
-    page.goto(module_url)
-    page.wait_for_load_state("networkidle")
+    page.goto(module_url, wait_until="domcontentloaded")
     _dismiss_cookie_banner(page)
+    page.get_by_text(re.compile(rf"^\s*{re.escape(MODULE_NAME)}\s*$", re.I)).first.wait_for(timeout=60_000)
     _shot(page, f"{tag}-02-curso")
 
     _open_new_lesson(page)
@@ -140,8 +139,7 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
         print(f"DRY_RUN ({tag}): parei antes de publicar.")
         return
     publish.click()
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(10_000)
     _shot(page, f"{tag}-06-publicado")
 
 
