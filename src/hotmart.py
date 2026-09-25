@@ -35,6 +35,16 @@ PROFILE_DIR = os.path.expanduser(os.environ.get("HOTMART_PROFILE_DIR", "~/.autom
 LOGIN_WAIT_MS = 60 * 60 * 1000  # espera até 1h por você entrar na Hotmart
 
 
+def _dismiss_cookie_banner(page: Page):
+    """Fecha o aviso "Este site utiliza cookies" (botão OK), que cobre os botões da página."""
+    banner = page.locator("hotmart-cookie-policy, #hotmart-cookie-policy")
+    ok = banner.get_by_role("button", name=re.compile(r"^\s*OK\s*$", re.I))
+    try:
+        ok.first.click(timeout=5000)
+    except Exception:
+        pass  # aviso já aceito antes (fica salvo no perfil)
+
+
 def _needs_human(page: Page) -> bool:
     return "sso.hotmart.com" in page.url or bool(TXT_CAPTCHA.search(page.content()))
 
@@ -95,6 +105,7 @@ def _open_new_lesson(page: Page):
 def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
     page.goto(module_url)
     page.wait_for_load_state("networkidle")
+    _dismiss_cookie_banner(page)
     _shot(page, f"{tag}-02-curso")
 
     _open_new_lesson(page)
