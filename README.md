@@ -4,8 +4,8 @@ Toda sexta de madrugada (depois da live de quinta, que termina às 22h), o GitHu
 
 1. procura a gravação nova do Google Meet na pasta do Google Drive;
 2. baixa o vídeo;
-3. entra na Hotmart (com o código do autenticador), abre o módulo **Lives Semanais**,
-   cria a aula **"Live DD/MM/AAAA"**, envia o vídeo e publica;
+3. entra na Hotmart (com o código do autenticador) e, em **cada curso configurado**, abre o
+   módulo **Lives Semanais**, cria a aula **"Live DD/MM/AAAA"**, envia o vídeo e publica;
 4. registra a gravação em `processed.json` para nunca enviar a mesma live duas vezes.
 
 Se algo falhar, o GitHub envia um e-mail avisando, e as capturas de tela de cada etapa
@@ -36,7 +36,7 @@ Em *Settings → Secrets and variables → Actions*:
 | Secret | `HOTMART_EMAIL` | e-mail de login da Hotmart |
 | Secret | `HOTMART_PASSWORD` | senha da Hotmart |
 | Secret | `HOTMART_TOTP_SECRET` | chave secreta do autenticador |
-| Secret | `HOTMART_MODULE_URL` | URL da tela de edição do módulo Lives Semanais (copie do navegador) |
+| Secret | `HOTMART_MODULE_URL` | URL da tela de edição do módulo Lives Semanais (copie do navegador). Para publicar em mais de um curso, cole uma URL por linha |
 | Variable | `MEET_NAME_FILTER` | parte do nome da reunião (ex.: `Live Semanal`). Opcional, mas recomendado |
 
 ### 4. Calibração (primeiro teste)

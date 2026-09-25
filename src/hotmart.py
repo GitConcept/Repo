@@ -43,11 +43,40 @@ def _login(page: Page, email: str, password: str, totp_secret: str):
     _shot(page, "01-logado")
 
 
-def publish_lesson(video_path: str, lesson_title: str, dry_run: bool = False):
+def module_urls():
+    """URLs de edição dos módulos de destino, uma por linha (um módulo por curso)."""
+    raw = os.environ["HOTMART_MODULE_URL"]
+    return [u.strip() for u in re.split(r"[\n,]+", raw) if u.strip()]
+
+
+def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
+    page.goto(module_url)
+    page.wait_for_load_state("networkidle")
+    _shot(page, f"{tag}-02-modulo")
+
+    page.get_by_role("button", name=TXT_ADD_CONTENT).first.click()
+    page.get_by_label(TXT_TITLE_LABEL).first.fill(lesson_title)
+    _shot(page, f"{tag}-03-titulo")
+
+    with page.expect_file_chooser() as fc:
+        page.get_by_text(TXT_UPLOAD_VIDEO).first.click()
+    fc.value.set_files(video_path)
+    page.get_by_text(TXT_UPLOAD_DONE).first.wait_for(timeout=UPLOAD_TIMEOUT_MS)
+    _shot(page, f"{tag}-04-upload")
+
+    if dry_run:
+        print(f"DRY_RUN ({tag}): parei antes de publicar.")
+        return
+    page.get_by_role("button", name=TXT_PUBLISH).first.click()
+    page.wait_for_load_state("networkidle")
+    _shot(page, f"{tag}-05-publicado")
+
+
+def publish_lesson(video_path: str, lesson_title: str, targets, dry_run: bool = False, on_done=None):
+    """Publica a aula em cada módulo de `targets` [(chave, url)], chamando on_done(chave) após cada sucesso."""
     email = os.environ["HOTMART_EMAIL"]
     password = os.environ["HOTMART_PASSWORD"]
     totp_secret = os.environ["HOTMART_TOTP_SECRET"]
-    module_url = os.environ["HOTMART_MODULE_URL"]  # URL de edição do módulo "Lives Semanais"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -55,27 +84,10 @@ def publish_lesson(video_path: str, lesson_title: str, dry_run: bool = False):
         page = ctx.new_page()
         try:
             _login(page, email, password, totp_secret)
-
-            page.goto(module_url)
-            page.wait_for_load_state("networkidle")
-            _shot(page, "02-modulo")
-
-            page.get_by_role("button", name=TXT_ADD_CONTENT).first.click()
-            page.get_by_label(TXT_TITLE_LABEL).first.fill(lesson_title)
-            _shot(page, "03-titulo")
-
-            with page.expect_file_chooser() as fc:
-                page.get_by_text(TXT_UPLOAD_VIDEO).first.click()
-            fc.value.set_files(video_path)
-            page.get_by_text(TXT_UPLOAD_DONE).first.wait_for(timeout=UPLOAD_TIMEOUT_MS)
-            _shot(page, "04-upload")
-
-            if dry_run:
-                print("DRY_RUN: parei antes de publicar.")
-                return
-            page.get_by_role("button", name=TXT_PUBLISH).first.click()
-            page.wait_for_load_state("networkidle")
-            _shot(page, "05-publicado")
+            for i, (key, url) in enumerate(targets, start=1):
+                _publish_in_module(page, url, video_path, lesson_title, dry_run, tag=f"curso{i}")
+                if on_done and not dry_run:
+                    on_done(key)
         except Exception:
             _shot(page, "99-erro")
             raise

@@ -49,8 +49,11 @@ jobs:
         working-directory: src
         run: |
           cp ../processed.json .
-          python main.py
+          status=0
+          python main.py || status=$?
+          # Guarda o progresso mesmo em caso de erro, para não repetir um curso já publicado.
           cp processed.json ../processed.json
+          exit $status
 
       - name: Salvar capturas de tela
         if: always()
@@ -61,7 +64,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Registrar gravação processada
-        if: success()
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

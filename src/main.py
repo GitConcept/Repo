@@ -21,7 +21,16 @@ def main():
         state = json.load(f)
     done = set(state["processed"])
 
-    pending = [r for r in drive.find_recordings(folder_id, name_filter) if r["id"] not in done]
+    urls = hotmart.module_urls()
+
+    def key(rec_id, url):
+        # Uma entrada por gravação + módulo: se um curso falhar, o outro não é repetido.
+        return f"{rec_id}|{url}"
+
+    pending = [
+        r for r in drive.find_recordings(folder_id, name_filter)
+        if any(key(r["id"], u) not in done for u in urls)
+    ]
     if not pending:
         print("Nenhuma gravação nova. Nada a fazer.")
         return
@@ -32,15 +41,18 @@ def main():
         title = f"Live {live_date:%d/%m/%Y}"
         print(f"Gravação: {rec['name']} -> aula '{title}'")
 
-        path = drive.download(rec["id"], os.path.join("downloads", "live.mp4"))
-        hotmart.publish_lesson(path, title, dry_run=dry_run)
-        os.remove(path)
+        targets = [(key(rec["id"], u), u) for u in urls if key(rec["id"], u) not in done]
 
-        if not dry_run:
-            state["processed"].append(rec["id"])
+        def mark_done(k):
+            state["processed"].append(k)
+            done.add(k)
             with open(STATE_FILE, "w") as f:
                 json.dump(state, f, indent=2)
-        print(f"OK: {title}")
+
+        path = drive.download(rec["id"], os.path.join("downloads", "live.mp4"))
+        hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)
+        os.remove(path)
+        print(f"OK: {title} ({len(targets)} curso(s))")
 
 
 if __name__ == "__main__":
