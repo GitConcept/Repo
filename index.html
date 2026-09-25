@@ -108,9 +108,12 @@
   /* Fullscreen active exercise */
   .live { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column;
     padding: calc(env(safe-area-inset-top) + 14px) 20px calc(env(safe-area-inset-bottom) + 20px); z-index: 10;
-    transition: background .4s; }
-  .live.work { background: radial-gradient(circle at 50% 42%, #0f2e1c 0%, var(--bg) 65%); }
-  .live.rest { background: radial-gradient(circle at 50% 42%, #3a1111 0%, var(--bg) 65%); }
+    isolation: isolate; }
+  .live::before, .live::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0;
+    transition: opacity .7s ease; pointer-events: none; }
+  .live::before { background: radial-gradient(circle at 50% 50%, #0f2e1c 0%, transparent 65%); }
+  .live::after { background: radial-gradient(circle at 50% 50%, #3a1111 0%, transparent 65%); }
+  .live.work::before, .live.rest::after { opacity: 1; }
   .live .top { padding: 0; width: 100%; }
   .live-head { text-align: center; margin-top: 14px; }
   .live-head .state { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 2px; padding: 6px 14px;
@@ -155,6 +158,50 @@
     .live-head h1 { font-size: 18px; margin-top: 8px; }
     .live-wt { font-size: 18px; padding: 6px 14px; margin-top: 6px; }
     .stat { padding: 8px; } .btn { padding: 14px; }
+  }
+  /* ---- Animações ---- */
+  :root { --ease: cubic-bezier(.22, 1, .36, 1); }
+  @keyframes inRight { from { opacity: 0; transform: translateX(40px); } }
+  @keyframes inLeft  { from { opacity: 0; transform: translateX(-40px); } }
+  @keyframes inUp    { from { opacity: 0; transform: translateY(18px); } }
+  @keyframes zoomIn  { from { opacity: 0; transform: scale(.94); } }
+  @keyframes fadeIn  { from { opacity: 0; } }
+  @keyframes sheetUp { from { transform: translateY(100%); } }
+  @keyframes pop     { 0% { transform: scale(1); } 40% { transform: scale(1.035); } 100% { transform: scale(1); } }
+  @keyframes pulse   { 0% { transform: scale(1); } 35% { transform: scale(1.06); } 100% { transform: scale(1); } }
+  @keyframes tick    { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+
+  .nav-fwd main, .nav-fwd .top { animation: inRight .45s var(--ease) both; }
+  .nav-back main, .nav-back .top { animation: inLeft .45s var(--ease) both; }
+  .nav-fwd .w-card, .nav-back .w-card, .nav-fwd .ex, .nav-back .ex, .nav-fwd .group, .nav-fwd .w-hero, .nav-back .hero {
+    animation: inUp .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms + 60ms); }
+  .nav-fwd .cta-wrap, .nav-back .cta-wrap { animation: inUp .45s var(--ease) both .15s; }
+  .nav-live .live { animation: zoomIn .45s var(--ease) both; }
+  .nav-live .live-head, .nav-live .stats, .nav-live .actions { animation: inUp .5s var(--ease) both; }
+  .nav-live .stats { animation-delay: .08s; } .nav-live .actions { animation-delay: .14s; }
+
+  .ex, .w-card, .btn, .cta, .icon-btn, .wt, .live-wt, .steps button {
+    transition: transform .18s var(--ease), background-color .3s, border-color .3s, opacity .3s, box-shadow .3s; }
+  .ex:active, .w-card:active { transform: scale(.975); }
+  .btn:active, .cta:active, .icon-btn:active, .wt:active, .live-wt:active, .steps button:active { transform: scale(.94); }
+  .ex.pop { animation: pop .35s var(--ease); }
+  .ex.selected { box-shadow: 0 0 0 4px rgba(34,197,94,.12); }
+  .nav-back .chk { animation: tick .45s var(--ease) both .25s; }
+  .bar i { transition: width .6s var(--ease); }
+
+  .ring .prog { transition: stroke .5s ease, filter .5s ease; }
+  .ring.flip { animation: pulse .5s var(--ease); }
+  .ring .time { transition: color .3s; }
+  .live-head .state, .mj-live { transition: background-color .5s, color .5s, border-color .5s; }
+  .swap { animation: fadeIn .35s ease both; }
+
+  .modal { animation: fadeIn .25s ease both; transition: opacity .22s ease; }
+  .modal .sheet { animation: sheetUp .38s var(--ease) both; transition: transform .25s ease; }
+  .modal.closing { opacity: 0; }
+  .modal.closing .sheet { transform: translateY(100%); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
   }
 </style>
 </head>
@@ -267,7 +314,7 @@ function editWeight(wid, i) {
       return String(+v.toFixed(2)).replace(".", ",");
     });
   });
-  const close = () => m.remove();
+  const close = () => closeModal(m);
   m.querySelector("#wNo").onclick = close;
   m.onclick = ev => { if (ev.target === m) close(); };
   m.querySelector("#wOk").onclick = () => {
@@ -311,9 +358,11 @@ function beep() {
 }
 
 // ---- Ações ----
-function openWorkout(id) { view.workoutId = id; render(); }
-function goHome() { view.workoutId = null; render(); }
-function selectExercise(i) { const s = session(view.workoutId); s.selected = i; save(); render(); }
+let navAnim = "", popIdx = null;
+function openWorkout(id) { view.workoutId = id; navAnim = "nav-fwd"; render(); }
+function goHome() { view.workoutId = null; navAnim = "nav-back"; render(); }
+function selectExercise(i) { const s = session(view.workoutId); if (s.selected !== i) popIdx = i; s.selected = i; save(); render(); }
+function closeModal(m, after) { m.classList.add("closing"); setTimeout(() => { m.remove(); after && after(); }, 230); }
 
 function startExercise() {
   const s = session(view.workoutId);
@@ -321,20 +370,21 @@ function startExercise() {
   const i = s.selected;
   delete s.done[i]; // retomar exercício concluído: continua de onde parou
   s.live = { i, phase: "work", phaseStart: Date.now(), restEnd: null, workAccum: s.times[i] || 0 };
-  save(); render();
+  navAnim = "nav-live"; save(); render();
 }
 function finishSet() {
   const s = session(view.workoutId), L = s.live;
   L.workAccum += Date.now() - L.phaseStart;
   s.setsDone[L.i] = (s.setsDone[L.i] || 0) + 1;
   L.phase = "rest"; L.phaseStart = Date.now(); L.restEnd = Date.now() + REST_SECONDS * 1000;
-  save(); render();
+  save(); refreshLive();
 }
 function startNextSet() {
   const s = session(view.workoutId), L = s.live;
   L.phase = "work"; L.phaseStart = Date.now(); L.restEnd = null;
-  save(); render();
+  save(); refreshLive();
 }
+function refreshLive() { if (document.getElementById("live")) update(false); else render(); }
 function finishExercise() {
   const w = current(), s = session(w.id), L = s.live, list = flat(w);
   if (L.phase === "work") {
@@ -343,7 +393,7 @@ function finishExercise() {
     if (elapsed > 3000) s.setsDone[L.i] = (s.setsDone[L.i] || 0) + 1; // conta a série em andamento
   }
   s.times[L.i] = L.workAccum;
-  s.done[L.i] = true; s.live = null;
+  s.done[L.i] = true; s.live = null; navAnim = "nav-back";
   let next = null;
   for (let k = 1; k <= list.length; k++) { const j = (L.i + k) % list.length; if (!s.done[j]) { next = j; break; } }
   s.selected = next; save(); render();
@@ -356,9 +406,9 @@ function resetWorkout() {
     <button class="btn orange" id="mYes">Zerar</button>
     <button class="btn dark" id="mNo">Cancelar</button></div>`;
   document.body.appendChild(m);
-  m.querySelector("#mNo").onclick = () => m.remove();
-  m.onclick = e => { if (e.target === m) m.remove(); };
-  m.querySelector("#mYes").onclick = () => { m.remove(); delete sessions[view.workoutId]; save(); render(); };
+  m.querySelector("#mNo").onclick = () => closeModal(m);
+  m.onclick = e => { if (e.target === m) closeModal(m); };
+  m.querySelector("#mYes").onclick = () => closeModal(m, () => { delete sessions[view.workoutId]; navAnim = "nav-fwd"; save(); render(); });
 }
 
 // ---- Render ----
@@ -368,6 +418,7 @@ const app = document.getElementById("app");
 
 function render() {
   clearInterval(tick); tick = null; cancelAnimationFrame(raf); raf = null;
+  app.className = navAnim; navAnim = "";
   if (!view.workoutId) return renderHome();
   const s = session(view.workoutId);
   if (s.live) return renderLive();
@@ -391,8 +442,8 @@ function renderHome() {
         <img class="mj-hero" src="${MJ.peace}" alt="">
       </div>
       <div class="section-head"><h2>Meus treinos</h2><span>Toque para abrir</span></div>
-      ${totals.map(({ w, total, done }) => `
-        <button class="w-card" onclick="openWorkout('${w.id}')">
+      ${totals.map(({ w, total, done }, k) => `
+        <button class="w-card" style="--i:${k + 1}" onclick="openWorkout('${w.id}')">
           <div class="w-letter">${w.id}</div>
           <div class="w-info">
             <b>${esc(w.title)}</b>
@@ -429,7 +480,7 @@ function renderWorkout() {
           const cls = [s.done[i] && "done", s.selected === i && "selected"].filter(Boolean).join(" ");
           const n = s.setsDone[i] || 0;
           const extra = s.done[i] ? ` · ✓ ${n} série${n === 1 ? "" : "s"}${s.times[i] ? ` · ${fmt(s.times[i])}` : ""}` : "";
-          return `<div class="ex ${cls}" onclick="selectExercise(${i})">
+          return `<div class="ex ${cls}${popIdx === i ? " pop" : ""}" style="--i:${i + 1}" onclick="selectExercise(${i})">
             <div class="num">${icon(e.name)}${s.done[i] ? `<span class="chk">✓</span>` : ""}</div>
             <div class="body">
               <div class="name">${esc(e.name)}</div>
@@ -442,6 +493,7 @@ function renderWorkout() {
     </main>
     ${sel ? `<div class="cta-wrap"><button class="cta" onclick="startExercise()">${resume ? "Retomar exercício" : "Iniciar exercício"}<small>${esc(sel.name)}</small></button></div>`
          : allDone ? "" : `<div class="cta-wrap"><button class="cta ghost" disabled>Selecione um exercício</button></div>`}`;
+  popIdx = null;
 }
 
 const R = 140, C = 2 * Math.PI * R;
@@ -494,6 +546,11 @@ function update(firstPaint) {
 
   const isWork = L.phase === "work";
   if (live.className !== `live ${L.phase}` || firstPaint) {
+    if (!firstPaint) {
+      const ring = live.querySelector(".ring");
+      ring.classList.remove("flip"); void ring.offsetWidth; ring.classList.add("flip");
+      ["mj", "state", "actions"].forEach(id => { const el = document.getElementById(id); el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); });
+    }
     live.className = `live ${L.phase}`;
     document.getElementById("mj").src = isWork ? MJ.sweat : MJ.pray;
     document.getElementById("state").textContent = isWork ? `SÉRIE ${n + 1} EM ANDAMENTO` : "DESCANSO";
