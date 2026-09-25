@@ -368,7 +368,7 @@ function beep() {
 let navAnim = "", popIdx = null;
 function openWorkout(id) { view.workoutId = id; navAnim = "nav-fwd"; render(); }
 function goHome() { view.workoutId = null; navAnim = "nav-back"; render(); }
-function selectExercise(i) { const s = session(view.workoutId); if (s.selected !== i) popIdx = i; s.selected = i; save(); render(); }
+function selectExercise(i) { const s = session(view.workoutId); s.selected = i; startExercise(); }
 function closeModal(m, after) { m.classList.add("closing"); setTimeout(() => { m.remove(); after && after(); }, 230); }
 
 function startExercise() {
@@ -499,8 +499,7 @@ function renderWorkout() {
         }).join("")}`).join("")}
       ${allDone ? `<div class="finished"><img class="mj-done" src="${MJ.thumbsup}" alt="">Treino concluído!<br><button class="link-btn" onclick="resetWorkout()">Zerar para a próxima vez</button></div>` : ""}
     </main>
-    ${sel ? `<div class="cta-wrap"><button class="cta" onclick="startExercise()">${resume ? "Retomar exercício" : "Iniciar exercício"}<small>${esc(sel.name)}</small></button></div>`
-         : allDone ? "" : `<div class="cta-wrap"><button class="cta ghost" disabled>Selecione um exercício</button></div>`}`;
+    `;
   popIdx = null;
 }
 
