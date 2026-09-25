@@ -20,7 +20,8 @@ TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
 TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
 TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
 TXT_PUBLISH = "Publicar"
-TXT_BUSY = re.compile(r"^\s*(Carregando|Otimizando|Enviando)\s*$")
+# Só o upload precisa terminar; a Hotmart deixa publicar enquanto a mídia é "Otimizando".
+TXT_BUSY = re.compile(r"^\s*(Carregando|Enviando)\s*$")
 PAUSE_MINUTES = 30
 TXT_DROPZONE = re.compile(r"Arraste ou solte sua m[íi]dia", re.I)
 TXT_SEND_FROM_PC = re.compile(r"Enviar do computador", re.I)
@@ -197,7 +198,7 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
     page.wait_for_timeout(5000)
     _shot(page, f"{tag}-04-enviando")
 
-    # Espera o envio terminar: nenhum selo "Carregando"/"Otimizando" VISÍVEL na aula
+    # Espera o upload terminar: nenhum selo "Carregando" VISÍVEL na aula
     # (textos escondidos na página não contam) e o botão Publicar habilitado.
     publish = page.get_by_role("button", name=TXT_PUBLISH, exact=True)
     busy = page.locator(f"text=/{TXT_BUSY.pattern}/i >> visible=true")
