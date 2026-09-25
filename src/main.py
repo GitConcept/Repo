@@ -64,9 +64,14 @@ def main():
             with open(STATE_FILE, "w") as f:
                 json.dump(state, f, indent=2)
 
-        path = drive.download(rec["id"], os.path.join("downloads", "live.mp4"))
-        hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)
-        os.remove(path)
+        path = os.path.join("downloads", "live.mp4")
+        try:
+            drive.download(rec["id"], path)
+            hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)
+        finally:
+            # Apaga o vídeo do Mac mesmo se der erro, para não ocupar espaço.
+            if os.path.exists(path):
+                os.remove(path)
         print(f"OK: {title} ({len(targets)} curso(s))")
 
 
