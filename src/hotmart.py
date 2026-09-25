@@ -200,7 +200,8 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
 
     # Espera o upload terminar: nenhum selo "Carregando" VISÍVEL na aula
     # (textos escondidos na página não contam) e o botão Publicar habilitado.
-    publish = page.get_by_role("button", name=TXT_PUBLISH, exact=True)
+    # Há outros botões "Publicar" (desabilitados) na página: usa o que envia o formulário da aula.
+    publish = page.get_by_role("button", name=TXT_PUBLISH, exact=True).and_(page.locator("[type=submit]")).first
     busy = page.locator(f"text=/{TXT_BUSY.pattern}/i >> visible=true")
     waited = 0
     while busy.count() or not publish.is_enabled():
