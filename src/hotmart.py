@@ -110,11 +110,12 @@ def _close_player_promo(page: Page) -> bool:
     if not promo.is_visible():
         return False
     page.keyboard.press("Escape")
-    if promo.is_visible():
-        # Botão de fechar (×) do aviso: nunca o "Ativar".
-        dialog = promo.locator("xpath=ancestor::*[.//button][1]")
-        dialog.get_by_role("button").filter(has_not_text=re.compile("Ativar", re.I)).first.click()
-    promo.wait_for(state="hidden", timeout=10_000)
+    try:
+        promo.wait_for(state="hidden", timeout=3000)  # o aviso fecha com animação
+    except Exception:
+        # Não fechou com Esc: clica no botão de fechar (×) do aviso, nunca no "Ativar".
+        page.locator("[data-slot='dialog-close']").first.click(force=True)
+        promo.wait_for(state="hidden", timeout=10_000)
     return True
 
 
