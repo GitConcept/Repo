@@ -1,8 +1,9 @@
 """Fluxo semanal: gravação no Drive -> aula no módulo "Lives Semanais" da Hotmart."""
 import json
 import os
+import re
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import drive
@@ -10,6 +11,16 @@ import hotmart
 
 STATE_FILE = "processed.json"
 TZ = ZoneInfo("America/Sao_Paulo")
+# Lives anteriores a esta data já foram publicadas à mão e são ignoradas.
+START_DATE = date.fromisoformat(os.environ.get("START_DATE") or "2026-09-24")
+
+
+def live_date(rec):
+    """Data da live: a que o Meet põe no nome do arquivo (ex.: 2026/09/24 20:27)."""
+    m = re.search(r"(\d{4})/(\d{2})/(\d{2})", rec["name"])
+    if m:
+        return date(int(m[1]), int(m[2]), int(m[3]))
+    return datetime.fromisoformat(rec["createdTime"].replace("Z", "+00:00")).astimezone(TZ).date()
 
 
 def main():
@@ -29,7 +40,7 @@ def main():
 
     pending = [
         r for r in drive.find_recordings(folder_id, name_filter, days_back=14)
-        if any(key(r["id"], u) not in done for u in urls)
+        if live_date(r) >= START_DATE and any(key(r["id"], u) not in done for u in urls)
     ]
     if not pending:
         print("Nenhuma gravação nova. Nada a fazer.")
@@ -42,8 +53,7 @@ def main():
 
     os.makedirs("downloads", exist_ok=True)
     for rec in pending:
-        live_date = datetime.fromisoformat(rec["createdTime"].replace("Z", "+00:00")).astimezone(TZ)
-        title = f"LIVE | DIA {live_date:%d/%m/%Y}"
+        title = f"LIVE | DIA {live_date(rec):%d/%m/%Y}"
         print(f"Gravação: {rec['name']} -> aula '{title}'")
 
         targets = [(key(rec["id"], u), u) for u in urls if key(rec["id"], u) not in done]

@@ -6,7 +6,7 @@ quando ele ligar. Para cada live nova, o robô:
 
 1. procura a gravação nova do Google Meet na pasta do Google Drive;
 2. baixa o vídeo;
-3. entra na Hotmart (com o código do autenticador) e, em **cada curso configurado**, abre o
+3. abre a Hotmart num navegador visível no Mac (com perfil próprio, que guarda o login) e, em **cada curso configurado**, abre o
    módulo **Lives Semanais**, cria a aula **"LIVE | DIA DD/MM/AAAA"**, envia o vídeo e publica;
 4. registra a gravação em `processed.json` para nunca enviar a mesma live duas vezes.
 
@@ -35,12 +35,16 @@ Em *Settings → Secrets and variables → Actions*:
 |---|---|---|
 | Secret | `GOOGLE_SERVICE_ACCOUNT_JSON` | conteúdo inteiro do arquivo JSON da chave |
 | Secret | `DRIVE_FOLDER_ID` | ID da pasta Meet Recordings |
-| Secret | `HOTMART_EMAIL` | e-mail de login da Hotmart |
-| Secret | `HOTMART_PASSWORD` | senha da Hotmart |
-| Secret | `HOTMART_TOTP_SECRET` | chave secreta do autenticador |
 | Secret | `HOTMART_MODULE_URL` | URL da página do curso na Área de Membros que lista os módulos (Produtos → curso → conteúdo). Para publicar em mais de um curso, cole uma URL por linha |
 | Variable | `HOTMART_MODULE_NAME` | Nome do módulo, igual aparece na tela. Opcional; padrão `LIVES SEMANAIS` |
+| Variable | `START_DATE` | Data (AAAA-MM-DD) da primeira live a publicar; anteriores são ignoradas. Padrão `2026-09-24` |
 | Variable | `MEET_NAME_FILTER` | parte do nome da reunião (ex.: `Live Semanal`). Opcional, mas recomendado |
+
+### Login na Hotmart
+O robô **não** faz login sozinho nem resolve verificações. Na primeira execução (e quando a
+sessão expirar), abre uma janela do navegador no Mac na tela de login e espera até 1 hora
+você entrar na Hotmart por ela. O login fica salvo no perfil do robô
+(`~/.automacao-lives/perfil-hotmart`) para as próximas execuções.
 
 ### 4. Calibração (primeiro teste)
 A Hotmart não tem API para criar aulas, então o robô usa a interface web. Os textos dos

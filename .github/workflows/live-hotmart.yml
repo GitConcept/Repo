@@ -40,9 +40,7 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
           MEET_NAME_FILTER: ${{ vars.MEET_NAME_FILTER }}
-          HOTMART_EMAIL: ${{ secrets.HOTMART_EMAIL }}
-          HOTMART_PASSWORD: ${{ secrets.HOTMART_PASSWORD }}
-          HOTMART_TOTP_SECRET: ${{ secrets.HOTMART_TOTP_SECRET }}
+          START_DATE: ${{ vars.START_DATE }}
           HOTMART_MODULE_URL: ${{ secrets.HOTMART_MODULE_URL }}
           HOTMART_MODULE_NAME: ${{ vars.HOTMART_MODULE_NAME || 'LIVES SEMANAIS' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}

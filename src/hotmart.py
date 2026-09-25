@@ -8,7 +8,6 @@ Se a Hotmart mudar a tela, ajuste apenas as constantes deste arquivo.
 import os
 import re
 
-import pyotp
 from playwright.sync_api import Page, sync_playwright
 
 LOGIN_URL = "https://sso.hotmart.com/login"
@@ -31,17 +30,37 @@ def _shot(page: Page, name: str):
     page.screenshot(path=f"{DEBUG_DIR}/{name}.png", full_page=True)
 
 
-def _login(page: Page, email: str, password: str, totp_secret: str):
-    page.goto(LOGIN_URL)
-    page.get_by_label(re.compile("e-?mail", re.I)).fill(email)
-    page.get_by_label(re.compile("senha|password", re.I)).fill(password)
-    page.get_by_role("button", name=re.compile("entrar|login", re.I)).click()
+TXT_CAPTCHA = re.compile(r"confirmar que voc[êe] [ée] humano", re.I)
+PROFILE_DIR = os.path.expanduser(os.environ.get("HOTMART_PROFILE_DIR", "~/.automacao-lives/perfil-hotmart"))
+LOGIN_WAIT_MS = 60 * 60 * 1000  # espera até 1h por você entrar na Hotmart
 
-    code_input = page.locator("input[autocomplete='one-time-code'], input[name*='code' i], input[name*='token' i]").first
-    code_input.wait_for(timeout=30_000)
-    code_input.fill(pyotp.TOTP(totp_secret).now())
-    page.get_by_role("button", name=re.compile("verificar|confirmar|entrar|continuar", re.I)).click()
-    page.wait_for_url(lambda url: "sso.hotmart.com" not in url, timeout=60_000)
+
+def _needs_human(page: Page) -> bool:
+    return "sso.hotmart.com" in page.url or bool(TXT_CAPTCHA.search(page.content()))
+
+
+def _ensure_logged_in(page: Page, url: str):
+    """Se a Hotmart pedir login ou verificação, espera você resolver na janela aberta.
+
+    O robô não preenche login nem verificação: quem entra é você, uma vez. O perfil do
+    navegador fica salvo no Mac, então nas próximas execuções a sessão já está aberta.
+    """
+    page.goto(url)
+    page.wait_for_load_state("networkidle")
+    if not _needs_human(page):
+        return
+    print("A Hotmart pediu login/verificação. Entre na Hotmart na janela do navegador aberta no Mac.")
+    _shot(page, "01-precisa-login")
+    page.bring_to_front()
+    page.wait_for_function(
+        """(pattern) => !location.hostname.startsWith('sso.') &&
+                        !new RegExp(pattern, 'i').test(document.body.innerText)""",
+        arg=TXT_CAPTCHA.pattern,
+        timeout=LOGIN_WAIT_MS,
+        polling=5000,
+    )
+    page.goto(url)
+    page.wait_for_load_state("networkidle")
     _shot(page, "01-logado")
 
 
@@ -117,16 +136,15 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
 
 def publish_lesson(video_path: str, lesson_title: str, targets, dry_run: bool = False, on_done=None):
     """Publica a aula em cada módulo de `targets` [(chave, url)], chamando on_done(chave) após cada sucesso."""
-    email = os.environ["HOTMART_EMAIL"]
-    password = os.environ["HOTMART_PASSWORD"]
-    totp_secret = os.environ["HOTMART_TOTP_SECRET"]
-
+    os.makedirs(PROFILE_DIR, exist_ok=True)
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(locale="pt-BR", viewport={"width": 1440, "height": 900})
-        page = ctx.new_page()
+        # Navegador visível com perfil próprio salvo no Mac (como um Chrome separado só do robô).
+        ctx = p.chromium.launch_persistent_context(
+            PROFILE_DIR, headless=False, locale="pt-BR", viewport={"width": 1440, "height": 900}
+        )
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            _login(page, email, password, totp_secret)
+            _ensure_logged_in(page, targets[0][1])
             for i, (key, url) in enumerate(targets, start=1):
                 _publish_in_module(page, url, video_path, lesson_title, dry_run, tag=f"curso{i}")
                 if on_done and not dry_run:
@@ -135,4 +153,4 @@ def publish_lesson(video_path: str, lesson_title: str, targets, dry_run: bool = 
             _shot(page, "99-erro")
             raise
         finally:
-            browser.close()
+            ctx.close()
