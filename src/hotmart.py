@@ -20,6 +20,7 @@ TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
 TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
 TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
 TXT_PUBLISH = "Publicar"
+TXT_MEDIA_EMPTY = re.compile(r"^\s*0\s*/\s*3\s*$")
 TXT_PROGRESS = re.compile(r"\d{1,3}\s?%|Enviando|Carregando", re.I)
 UPLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000  # até 3h para vídeos grandes
 # ---------------------------------------------------------------------------
@@ -112,13 +113,16 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
     page.get_by_placeholder(TXT_TITLE_PLACEHOLDER).fill(lesson_title)
     _shot(page, f"{tag}-03-titulo")
 
-    file_input = page.locator("input[type=file]")
-    if file_input.count():
-        file_input.first.set_input_files(video_path)
+    # O formulário tem dois campos de arquivo (miniatura e mídia): usa o que aceita vídeo.
+    video_input = page.locator("input[type=file][accept*='video'], input[type=file][accept*='mp4'], input[type=file][accept*='.mov']")
+    if video_input.count():
+        video_input.first.set_input_files(video_path)
     else:
         with page.expect_file_chooser() as fc:
             page.get_by_role("button", name=TXT_SELECT_FILE).click()
         fc.value.set_files(video_path)
+    # Confirma que o envio começou: o contador de mídias sai de "0/3".
+    page.get_by_text(TXT_MEDIA_EMPTY).wait_for(state="hidden", timeout=120_000)
     page.wait_for_timeout(5000)
     _shot(page, f"{tag}-04-enviando")
 
