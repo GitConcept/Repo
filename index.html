@@ -71,7 +71,7 @@
   .group { font-size: 12px; font-weight: 600; letter-spacing: 1.5px; margin: 22px 0 10px; color: var(--muted); }
   .ex { display: flex; gap: 12px; align-items: center; background: var(--card); border-radius: 18px; padding: 14px;
     margin-bottom: 10px; border: 2px solid transparent; cursor: pointer; transition: border-color .2s, background .2s; }
-  .ex .num { width: 42px; height: 42px; border-radius: 12px; background: var(--card2); display: grid; place-items: center;
+  .ex .num { position: relative; width: 56px; height: 56px; border-radius: 14px; background: var(--card2); display: grid; place-items: center;
     font-weight: 700; flex: none; }
   .ex .body { flex: 1; min-width: 0; }
   .ex .name { font-weight: 600; font-size: 15px; }
@@ -127,6 +127,16 @@
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
   .sheet { background: var(--card); width: 100%; max-width: 560px; border-radius: 24px 24px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; }
   .sheet h3 { margin: 0; font-size: 18px; } .sheet p { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+  .pic { width: 44px; height: 44px; }
+  .pic .f, .pic .e { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .pic .f { stroke: var(--orange); stroke-width: 3; }
+  .pic .e { stroke: #75757e; stroke-width: 2.4; }
+  .pic .hd { fill: var(--orange); }
+  .ex.selected .num { background: #1c3a27; }
+  .ex.done .num { background: var(--card2); }
+  .chk { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; background: var(--green);
+    color: #fff; font-size: 12px; display: grid; place-items: center; }
+  .live-pic { width: 56px; height: 56px; background: var(--card); border-radius: 16px; display: grid; place-items: center; margin: 0 auto 4px; }
 </style>
 </head>
 <body>
@@ -177,6 +187,32 @@ const WORKOUTS = [
     ]},
   ]},
 ];
+
+
+// Ícones desenhados: figura em laranja (f), equipamento em cinza (e)
+const f = d => `<path d="${d}" class="f"/>`, e = d => `<path d="${d}" class="e"/>`, h = (x, y) => `<circle cx="${x}" cy="${y}" r="3.6" class="hd"/>`;
+const ICONS = {
+  "Supino reto com barra": e("M8 32h32M14 32v8M34 32v8M10 14v6M38 14v6M10 17h28") + h(10, 28) + f("M14 29h18l6 4M34 33l4 7M20 29v-6l-3-6M26 29v-6l3-6"),
+  "Supino inclinado com halteres": e("M10 40l22-16M30 26v14M14 36v4") + h(12, 30) + f("M15 32l12-9M27 23l6 2 4 8M20 29l-2-8M24 26l2-8") + e("M15 19h6M23 16h6"),
+  "Peck deck / Crucifixo": e("M24 38v6M16 44h16M8 12v14M40 12v14") + h(24, 12) + f("M24 16v14M24 30l-5 12M24 30l5 12M24 19c-5 2-10 4-14 2M24 19c5 2 10 4 14 2"),
+  "Crossover na polia (baixo pra cima)": e("M6 6v38M42 6v38M6 40l12-12M42 40L30 28") + h(24, 12) + f("M24 16v14M24 30l-5 12M24 30l5 12M24 19l-6 9M24 19l6 9"),
+  "Francês na polia (corda ou barra reta)": e("M24 2v4M24 6l-3 4M24 6l3 4") + h(24, 18) + f("M24 22v12M24 34l-5 10M24 34l5 10M24 24l-5-6 3-8M24 24l5-6-3-8"),
+  "Bi-set: Corda + Barra reta na polia": e("M40 4v40M40 8L30 20M26 28h8") + h(22, 10) + f("M22 14v14M22 28l-4 14M22 28l4 14M22 17l6 5 4 6M22 17l4 7 2 4"),
+  "Puxada frontal": e("M24 2v6M12 8h24M14 36h20M14 36v8") + h(24, 18) + f("M24 22v12M24 34h8v10M24 24l-8-8-2-8M24 24l8-8 2-8"),
+  "Remada baixa no cabo": e("M42 20v18M42 26H30M4 38h26") + h(14, 16) + f("M14 20l2 12M16 32h10l2 6M15 23l8 3h7") + e("M28 22v8"),
+  "Remada unilateral com haltere": e("M4 30h20M8 30v12M20 30v12") + h(34, 16) + f("M31 18l-14 6M17 24l-6 6M31 18l3 22M24 21l1 10") + e("M22 31h6"),
+  "Pullover na polia ou haltere": e("M8 34h32M14 34v8M34 34v8") + h(34, 30) + f("M30 31H12l-4 3M24 31l-9-9-7 0M26 31l-8-10-8-1") + e("M5 17v8"),
+  "Rosca direta com barra": h(24, 8) + f("M24 12v16M24 28l-4 16M24 28l4 16M24 15l-7 6 4 5M24 15l7 6-4 5") + e("M13 26h22"),
+  "Rosca martelo": h(24, 8) + f("M24 12v16M24 28l-4 16M24 28l4 16M24 15l-6 10 2-8M24 15l6 12") + e("M16 14v6M30 24v6"),
+  "Rosca scott": e("M10 26l14 8M14 44l10-10") + h(30, 12) + f("M30 16l-2 14M28 30l-4 14M29 19l-9 7 0-10M29 19l-7 9 0-10") + e("M16 14h8"),
+  "Agachamento livre ou Hack squat": e("M10 12h28M12 9v6M36 9v6") + h(24, 8) + f("M24 12l2 14M26 26l-10 4 2 12M26 26l6 6-2 10M24 14l-6 -1M24 14l6-1"),
+  "Leg press 45°": e("M40 4l-10 10M4 40h22M10 40l0-14") + h(10, 20) + f("M10 24l6 12M16 36l8-8 8-8M16 36l10-6 6-6M11 27l6 5"),
+  "Extensora": e("M10 20v14M10 34h14M14 34v10") + h(14, 10) + f("M14 14l0 16M14 30h12l14-4M14 18l8 6"),
+  "Stiff com barra": h(34, 14) + f("M31 16L16 22M16 22l2 22M16 22l4 22M28 17l0 16M22 19l0 14") + e("M16 34h18"),
+  "Mesa flexora (leg curl deitado)": e("M4 32h34M10 32v10M30 32v10") + h(6, 26) + f("M9 28h22l6-10M31 28l5-12M16 28l2-6") + e("M34 14l4 4"),
+  "Panturrilha em pé na máquina": e("M12 4h24M16 4v6M32 4v6M16 42h16l0 4") + h(24, 12) + f("M24 16v14M24 30l-3 10 -1 2M24 30l3 10 1 2M24 18l-7-6M24 18l7-6"),
+};
+const icon = name => `<svg viewBox="0 0 48 48" class="pic">${ICONS[name] || ""}</svg>`;
 
 // ---- State ----
 // sessão por treino:
@@ -328,7 +364,7 @@ function renderWorkout() {
           const n = s.setsDone[i] || 0;
           const extra = s.done[i] ? ` · ✓ ${n} série${n === 1 ? "" : "s"}${s.times[i] ? ` · ${fmt(s.times[i])}` : ""}` : "";
           return `<div class="ex ${cls}" onclick="selectExercise(${i})">
-            <div class="num">${s.done[i] ? "✓" : i + 1}</div>
+            <div class="num">${icon(e.name)}${s.done[i] ? `<span class="chk">✓</span>` : ""}</div>
             <div class="body">
               <div class="name">${esc(e.name)}</div>
               <div class="meta">${e.sets} séries × ${e.reps} reps${extra}</div>
