@@ -203,6 +203,12 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
   }
+  /* Gesto de voltar (arrastar da borda esquerda) */
+  html, body { overflow-x: hidden; }
+  #app.dragging { box-shadow: -12px 0 30px rgba(0,0,0,.6); background: var(--bg); min-height: 100vh; }
+  .underlay { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); pointer-events: none; }
+  .underlay::after { content: ""; position: absolute; inset: 0; background: #000; opacity: var(--shade, .5); }
+  #app { position: relative; z-index: 1; }
 </style>
 </head>
 <body>
@@ -425,10 +431,11 @@ function render() {
   renderWorkout();
 }
 
-function renderHome() {
+function renderHome() { app.innerHTML = homeHTML(); }
+function homeHTML() {
   const totals = WORKOUTS.map(w => ({ w, total: flat(w).length, done: Object.keys(session(w.id).done).length }));
   const allEx = totals.reduce((a, t) => a + t.total, 0);
-  app.innerHTML = `
+  return `
     <div class="top">
       <img class="avatar" src="${MJ.fist}" alt="">
       <div class="hello" style="flex:1"><small>Bem-vindo de volta</small><b>Ivan</b></div>
@@ -575,6 +582,57 @@ function update(firstPaint) {
   document.getElementById("time").textContent = shown;
   document.getElementById("prog").setAttribute("stroke-dashoffset", C * (1 - Math.min(1, Math.max(0, frac))));
 }
+
+// ---- Voltar arrastando da borda esquerda (como no iPhone) ----
+(() => {
+  const EDGE = 28;
+  let startX = 0, startY = 0, t0 = 0, dx = 0, active = false, decided = false, under = null;
+  const W = () => window.innerWidth;
+  const canGoBack = () => view.workoutId && !session(view.workoutId).live && !document.querySelector(".modal");
+  const setX = x => {
+    app.style.transform = `translateX(${x}px)`;
+    const p = Math.min(1, x / W());
+    if (under) { under.style.transform = `translateX(${(p - 1) * 30}%)`; under.style.setProperty("--shade", (1 - p) * .5); }
+  };
+  addEventListener("touchstart", e => {
+    const t = e.touches[0];
+    if (e.touches.length !== 1 || t.clientX > EDGE || !canGoBack()) return;
+    active = true; decided = false; startX = t.clientX; startY = t.clientY; t0 = performance.now(); dx = 0;
+  }, { passive: true });
+  addEventListener("touchmove", e => {
+    if (!active) return;
+    const t = e.touches[0], mx = t.clientX - startX, my = t.clientY - startY;
+    if (!decided) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      if (Math.abs(my) > Math.abs(mx) || mx < 0) { active = false; return; } // rolagem vertical: ignora
+      decided = true;
+      under = document.createElement("div");
+      under.className = "underlay"; under.innerHTML = homeHTML();
+      document.body.prepend(under);
+      app.classList.add("dragging"); app.style.transition = "none"; under.style.transition = "none";
+    }
+    e.preventDefault();
+    dx = Math.max(0, mx); setX(dx);
+  }, { passive: false });
+  const end = () => {
+    if (!active) return;
+    active = false;
+    if (!decided) return;
+    const v = dx / Math.max(1, performance.now() - t0);
+    const go = dx > W() * .35 || (v > .5 && dx > 40);
+    const ease = "cubic-bezier(.22,1,.36,1)", dur = go ? 280 : 320;
+    app.style.transition = `transform ${dur}ms ${ease}`;
+    under.style.transition = `transform ${dur}ms ${ease}`;
+    requestAnimationFrame(() => setX(go ? W() : 0));
+    setTimeout(() => {
+      app.classList.remove("dragging"); app.style.transition = ""; app.style.transform = "";
+      under.remove(); under = null;
+      if (go) { view.workoutId = null; render(); }
+    }, dur);
+  };
+  addEventListener("touchend", end);
+  addEventListener("touchcancel", end);
+})();
 
 document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
 render();
