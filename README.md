@@ -1,6 +1,8 @@
 # Live semanal → Hotmart
 
-Toda sexta de madrugada (depois da live de quinta, que termina às 22h), o GitHub Actions:
+A cada 4 horas, no Mac (runner self-hosted do GitHub Actions), o robô procura lives dos últimos
+14 dias que ainda não subiram. Se o Mac estiver desligado, a execução espera na fila e roda
+quando ele ligar. Para cada live nova, o robô:
 
 1. procura a gravação nova do Google Meet na pasta do Google Drive;
 2. baixa o vídeo;
@@ -49,6 +51,16 @@ botões em `src/hotmart.py` precisam ser conferidos na sua conta:
 2. Veja as capturas de tela. Se parou em alguma etapa, ajuste a constante
    correspondente no topo de `src/hotmart.py` e rode de novo.
 3. Quando passar inteiro, rode sem dry_run (ou espere a próxima sexta).
+
+### Instalar o runner no Mac
+1. No Terminal, rode `xcode-select --install` (instala o git; pule se já tiver) e confira que
+   `python3 --version` funciona.
+2. No GitHub: **Settings → Actions → Runners → New self-hosted runner → macOS** e rode, no
+   Terminal, os comandos das seções *Download* e *Configure* (aceite os padrões com Enter).
+3. Para iniciar sozinho com o Mac: `./svc.sh install` e depois `./svc.sh start`, na pasta
+   `actions-runner`.
+4. Em **Ajustes do Sistema → Bateria/Energia**, evite que o Mac entre em repouso quando
+   ligado na tomada.
 
 ## Limitações
 - Se a Hotmart mudar o layout, o robô pode quebrar. Você recebe e-mail de falha;

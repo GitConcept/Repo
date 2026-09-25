@@ -28,7 +28,7 @@ def main():
         return f"{rec_id}|{url}"
 
     pending = [
-        r for r in drive.find_recordings(folder_id, name_filter)
+        r for r in drive.find_recordings(folder_id, name_filter, days_back=14)
         if any(key(r["id"], u) not in done for u in urls)
     ]
     if not pending:

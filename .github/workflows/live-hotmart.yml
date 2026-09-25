@@ -2,10 +2,10 @@ name: Live semanal -> Hotmart
 
 on:
   schedule:
-    # Sexta 02:17, 04:17 e 07:17 UTC = quinta 23:17, sexta 01:17 e 04:17 (Brasília).
-    # Várias tentativas porque o Meet pode demorar para gerar a gravação.
+    # A cada 4 horas, todos os dias. Roda no Mac (runner self-hosted): se ele estiver
+    # desligado, a execução fica na fila e roda quando o Mac ligar.
     # Não duplica: gravações já enviadas ficam registradas em processed.json.
-    - cron: "17 2,4,7 * * 5"
+    - cron: "17 */4 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   upload:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
       - name: Instalar dependências
         run: |
           pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
+          python -m playwright install chromium
 
       - name: Drive -> Hotmart
         env:
