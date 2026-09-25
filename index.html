@@ -120,13 +120,13 @@
   .live-head h1 { font-size: 22px; font-weight: 700; margin: 12px 0 2px; }
   .live-head p { margin: 0; color: var(--muted); font-size: 13px; }
   .ring-wrap { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 14px 0; container-type: size; }
-  .ring { position: relative; width: min(100cqw, 100cqh, 340px); aspect-ratio: 1; }
+  .ring { position: relative; width: min(100cqw, 100cqh, 340px); aspect-ratio: 1; container-type: inline-size; }
   .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
   .ring .track { stroke: var(--card2); }
   .work .ring .prog { stroke: var(--green); filter: drop-shadow(0 0 8px rgba(34,197,94,.6)); }
   .rest .ring .prog { stroke: var(--red); filter: drop-shadow(0 0 8px rgba(239,68,68,.6)); }
   .ring .center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-  .ring .time { font-size: clamp(28px, 20cqmin, 76px); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  .ring .time { font-size: 22cqw; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
   .ring .label { color: var(--muted); font-size: 13px; margin-top: 6px; }
   .stats { display: flex; gap: 10px; margin-bottom: 14px; flex: none; }
   .stat { flex: 1; background: var(--card); border-radius: 16px; padding: 12px; text-align: center; }
@@ -150,6 +150,12 @@
   .chk { position: absolute; right: -4px; top: -4px; width: 20px; height: 20px; border-radius: 50%; background: var(--green);
     color: #fff; font-size: 12px; display: grid; place-items: center; }
   .live-pic { width: 56px; height: 56px; background: var(--card); border-radius: 16px; display: grid; place-items: center; margin: 0 auto 4px; }
+  @media (max-height: 720px) {
+    .mj-live { width: 44px; height: 44px; margin-bottom: 6px; }
+    .live-head h1 { font-size: 18px; margin-top: 8px; }
+    .live-wt { font-size: 18px; padding: 6px 14px; margin-top: 6px; }
+    .stat { padding: 8px; } .btn { padding: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -462,7 +468,7 @@ function renderLive() {
             <circle class="prog" id="prog" cx="160" cy="160" r="${R}" fill="none" stroke-width="16"
               stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"/>
           </svg>
-          <div class="center"><div class="time" id="time">00:00</div><div class="label" id="label"></div></div>
+          <div class="center"><div class="time" id="time">00:00</div></div>
         </div>
       </div>
       <div class="stats">
@@ -491,7 +497,6 @@ function update(firstPaint) {
     live.className = `live ${L.phase}`;
     document.getElementById("mj").src = isWork ? MJ.sweat : MJ.pray;
     document.getElementById("state").textContent = isWork ? `SÉRIE ${n + 1} EM ANDAMENTO` : "DESCANSO";
-    document.getElementById("label").textContent = isWork ? "tempo da série" : "até a próxima série";
     document.getElementById("setNum").textContent = n;
     document.getElementById("actions").innerHTML = isWork
       ? `<button class="btn green" onclick="finishSet()">✓ Série concluída</button>
