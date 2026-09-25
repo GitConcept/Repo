@@ -15,7 +15,10 @@ LOGIN_URL = "https://sso.hotmart.com/login"
 DEBUG_DIR = "debug"
 
 # --- Textos da interface (ajuste aqui se a Hotmart mudar) -------------------
-TXT_ADD_CONTENT = re.compile(r"(Adicionar|Nova) (aula|conteúdo|página)", re.I)
+MODULE_NAME = os.environ.get("HOTMART_MODULE_NAME", "LIVES SEMANAIS")
+TXT_MODULE_CARD = "Mostrar turmas"  # texto presente em cada cartão de módulo
+# Depois do "+", a Hotmart pode perguntar o tipo de conteúdo; o robô escolhe este, se aparecer.
+TXT_ADD_CONTENT = re.compile(r"(Adicionar|Nova|Novo) (aula|conteúdo|página)|^V[íi]deo$", re.I)
 TXT_TITLE_LABEL = re.compile(r"(Título|Nome)", re.I)
 TXT_UPLOAD_VIDEO = re.compile(r"(Enviar|Adicionar|Upload).*(vídeo|video|mídia)", re.I)
 TXT_UPLOAD_DONE = re.compile(r"(processando|enviado|concluído|100%)", re.I)
@@ -44,7 +47,7 @@ def _login(page: Page, email: str, password: str, totp_secret: str):
 
 
 def module_urls():
-    """URLs de edição dos módulos de destino, uma por linha (um módulo por curso)."""
+    """URLs da página de conteúdo de cada curso (lista de módulos), uma por linha."""
     raw = os.environ["HOTMART_MODULE_URL"]
     return [u.strip() for u in re.split(r"[\n,]+", raw) if u.strip()]
 
@@ -54,7 +57,14 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
     page.wait_for_load_state("networkidle")
     _shot(page, f"{tag}-02-modulo")
 
-    page.get_by_role("button", name=TXT_ADD_CONTENT).first.click()
+    # Acha o cartão do módulo pelo nome e clica no botão "+" dele.
+    title = page.get_by_text(re.compile(rf"^\s*{re.escape(MODULE_NAME)}\s*$", re.I)).first
+    card = title.locator(f"xpath=ancestor::*[contains(., '{TXT_MODULE_CARD}')][1]")
+    card.get_by_role("button").first.click()
+    page.wait_for_timeout(1500)
+    choice = page.get_by_text(TXT_ADD_CONTENT).first
+    if choice.count():
+        choice.click()
     page.get_by_label(TXT_TITLE_LABEL).first.fill(lesson_title)
     _shot(page, f"{tag}-03-titulo")
 

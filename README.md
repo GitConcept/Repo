@@ -36,7 +36,8 @@ Em *Settings → Secrets and variables → Actions*:
 | Secret | `HOTMART_EMAIL` | e-mail de login da Hotmart |
 | Secret | `HOTMART_PASSWORD` | senha da Hotmart |
 | Secret | `HOTMART_TOTP_SECRET` | chave secreta do autenticador |
-| Secret | `HOTMART_MODULE_URL` | URL da tela de edição do módulo Lives Semanais (copie do navegador). Para publicar em mais de um curso, cole uma URL por linha |
+| Secret | `HOTMART_MODULE_URL` | URL da página do curso na Área de Membros que lista os módulos (Produtos → curso → conteúdo). Para publicar em mais de um curso, cole uma URL por linha |
+| Variable | `HOTMART_MODULE_NAME` | Nome do módulo, igual aparece na tela. Opcional; padrão `LIVES SEMANAIS` |
 | Variable | `MEET_NAME_FILTER` | parte do nome da reunião (ex.: `Live Semanal`). Opcional, mas recomendado |
 
 ### 4. Calibração (primeiro teste)

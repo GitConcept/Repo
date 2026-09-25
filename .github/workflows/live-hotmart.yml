@@ -45,6 +45,7 @@ jobs:
           HOTMART_PASSWORD: ${{ secrets.HOTMART_PASSWORD }}
           HOTMART_TOTP_SECRET: ${{ secrets.HOTMART_TOTP_SECRET }}
           HOTMART_MODULE_URL: ${{ secrets.HOTMART_MODULE_URL }}
+          HOTMART_MODULE_NAME: ${{ vars.HOTMART_MODULE_NAME || 'LIVES SEMANAIS' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         working-directory: src
         run: |
