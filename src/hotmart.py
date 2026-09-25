@@ -87,14 +87,15 @@ def _open_new_lesson(page: Page):
     card = name.locator(
         f"xpath=ancestor::*[count(.//text()[contains(., '{TXT_MODULE_CARD}')]) = 1][last()]"
     )
-    aula = page.get_by_text(TXT_MENU_AULA, exact=True).first
-    # O cartão tem alguns botões sem texto (+, ⋮); testa até abrir o menu com "Aula".
-    buttons = card.get_by_role("button").filter(has_not_text=TXT_MODULE_CARD)
-    for i in range(buttons.count()):
-        buttons.nth(i).click()
+    # Cada cartão tem o próprio menu escondido com "Aula": usa só o que estiver visível.
+    aula = page.locator(f'text="{TXT_MENU_AULA}" >> visible=true')
+    # Botões visíveis do cartão (+, ⋮, ...): testa até abrir o menu com "Aula".
+    buttons = [b for b in card.get_by_role("button").filter(has_not_text=TXT_MODULE_CARD).all() if b.is_visible()]
+    for button in buttons:
+        button.click()
         try:
-            aula.wait_for(timeout=3000)
-            aula.click()
+            aula.first.wait_for(state="visible", timeout=3000)
+            aula.first.click()
             return
         except Exception:
             page.keyboard.press("Escape")
