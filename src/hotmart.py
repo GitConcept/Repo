@@ -26,7 +26,8 @@ TXT_SEND_FROM_PC = re.compile(r"Enviar do computador", re.I)
 TXT_ADD_MEDIA = re.compile(r"^\s*Adicionar m[íi]dia\s*$", re.I)
 TXT_PLAYER_PROMO = re.compile(r"Player de v[íi]deo da Hotmart", re.I)
 TXT_MEDIA_EMPTY = re.compile(r"^\s*0\s*/\s*3\s*$")
-TXT_PROGRESS = re.compile(r"\d{1,3}\s?%|Enviando|Carregando", re.I)
+# Enquanto o vídeo sobe/processa, a aula mostra "Carregando" e depois "Otimizando".
+TXT_PROGRESS = re.compile(r"\bCarregando\b|\bOtimizando\b|\bEnviando\b|\d{1,3}\s?%", re.I)
 UPLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000  # até 3h para vídeos grandes
 # ---------------------------------------------------------------------------
 
@@ -160,26 +161,18 @@ def _choose_file(page: Page, video_path: str):
         with page.expect_file_chooser(timeout=30_000) as fc:
             page.get_by_role("button", name=TXT_SELECT_FILE).last.click()
         fc.value.set_files(video_path)
+    # Ao escolher o arquivo, a janela fecha sozinha e o vídeo aparece na aula ("Carregando").
+    # Se a janela continuar aberta com "Adicionar mídia", clica nele.
     page.wait_for_timeout(5000)
-    _shot(page, "04c-enviando")
-
-    # Espera o envio para a biblioteca terminar e o botão "Adicionar mídia" liberar.
     add = page.get_by_role("button", name=TXT_ADD_MEDIA)
-    file_name = os.path.basename(video_path)
-    deadline_ms = UPLOAD_TIMEOUT_MS
-    waited = 0
-    while not add.is_enabled():
-        if waited >= deadline_ms:
-            raise RuntimeError("O envio do vídeo para a Hotmart não terminou a tempo.")
-        # Se o arquivo enviado aparecer na lista sem estar selecionado, seleciona.
-        item = page.get_by_text(file_name, exact=True).first
-        if item.is_visible() and not TXT_PROGRESS.search(item.locator("xpath=..").inner_text()):
-            item.click()
-        page.wait_for_timeout(10_000)
-        waited += 10_000
-        if waited % 60_000 == 0:
-            _shot(page, "04d-aguardando-envio")
-    add.click()
+    if add.count() and add.first.is_visible():
+        add.first.wait_for(state="visible")
+        page.wait_for_function(
+            "(re) => [...document.querySelectorAll('button')].some(b => new RegExp(re,'i').test(b.innerText) && !b.disabled)",
+            arg=TXT_ADD_MEDIA.pattern, timeout=UPLOAD_TIMEOUT_MS, polling=5000,
+        )
+        add.first.click()
+    _shot(page, "04c-enviando")
 
 
 def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
