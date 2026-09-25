@@ -77,4 +77,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add processed.json
-          git diff --cached --quiet || (git commit -m "Registra live enviada à Hotmart" && git push)
+          git diff --cached --quiet || (git commit -m "Registra live enviada à Hotmart" && git pull --rebase && git push)

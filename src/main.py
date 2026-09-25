@@ -12,6 +12,21 @@ import hotmart
 STATE_FILE = "processed.json"
 TZ = ZoneInfo("America/Sao_Paulo")
 # Lives anteriores a esta data já foram publicadas à mão e são ignoradas.
+# Registro de atividades no Mac (lido pelo painel do vault OS-IVAN): uma linha JSON por evento.
+ACTIVITY_LOG = os.path.expanduser(os.environ.get("ACTIVITY_LOG", "~/.automacao-lives/atividades.jsonl"))
+
+
+def log_activity(status, title, detail=""):
+    try:
+        os.makedirs(os.path.dirname(ACTIVITY_LOG), exist_ok=True)
+        entry = {"quando": datetime.now(TZ).isoformat(timespec="seconds"), "automacao": "Live → Hotmart",
+                 "status": status, "titulo": title, "detalhe": detail}
+        with open(ACTIVITY_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"Aviso: não consegui registrar a atividade: {e}")
+
+
 START_DATE = date.fromisoformat(os.environ.get("START_DATE") or "2026-09-24")
 
 
@@ -68,7 +83,10 @@ def main():
         if not targets:
             continue
 
+        published = []
+
         def mark_done(k):
+            published.append(k)
             state["processed"].append(k)
             done.add(k)
             with open(STATE_FILE, "w") as f:
@@ -79,6 +97,13 @@ def main():
         try:
             drive.download(rec["id"], path)
             hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)
+        except Exception as e:
+            if not dry_run:
+                log_activity("erro", title, f"{len(published)} de {len(targets)} curso(s) publicados. Erro: {e}"[:500])
+            raise
+        else:
+            if not dry_run:
+                log_activity("publicada", title, f"Publicada em {len(targets)} curso(s) na Hotmart.")
         finally:
             # Apaga o vídeo do Mac mesmo se der erro, para não ocupar espaço.
             if os.path.exists(path):
