@@ -38,7 +38,7 @@ def main():
     os.makedirs("downloads", exist_ok=True)
     for rec in pending:
         live_date = datetime.fromisoformat(rec["createdTime"].replace("Z", "+00:00")).astimezone(TZ)
-        title = f"Live {live_date:%d/%m/%Y}"
+        title = f"LIVE | DIA {live_date:%d/%m/%Y}"
         print(f"Gravação: {rec['name']} -> aula '{title}'")
 
         targets = [(key(rec["id"], u), u) for u in urls if key(rec["id"], u) not in done]

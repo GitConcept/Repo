@@ -5,7 +5,7 @@ Toda sexta de madrugada (depois da live de quinta, que termina às 22h), o GitHu
 1. procura a gravação nova do Google Meet na pasta do Google Drive;
 2. baixa o vídeo;
 3. entra na Hotmart (com o código do autenticador) e, em **cada curso configurado**, abre o
-   módulo **Lives Semanais**, cria a aula **"Live DD/MM/AAAA"**, envia o vídeo e publica;
+   módulo **Lives Semanais**, cria a aula **"LIVE | DIA DD/MM/AAAA"**, envia o vídeo e publica;
 4. registra a gravação em `processed.json` para nunca enviar a mesma live duas vezes.
 
 Se algo falhar, o GitHub envia um e-mail avisando, e as capturas de tela de cada etapa

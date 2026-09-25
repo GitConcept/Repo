@@ -16,13 +16,12 @@ DEBUG_DIR = "debug"
 
 # --- Textos da interface (ajuste aqui se a Hotmart mudar) -------------------
 MODULE_NAME = os.environ.get("HOTMART_MODULE_NAME", "LIVES SEMANAIS")
-TXT_MODULE_CARD = "Mostrar turmas"  # texto presente em cada cartão de módulo
-# Depois do "+", a Hotmart pode perguntar o tipo de conteúdo; o robô escolhe este, se aparecer.
-TXT_ADD_CONTENT = re.compile(r"(Adicionar|Nova|Novo) (aula|conteúdo|página)|^V[íi]deo$", re.I)
-TXT_TITLE_LABEL = re.compile(r"(Título|Nome)", re.I)
-TXT_UPLOAD_VIDEO = re.compile(r"(Enviar|Adicionar|Upload).*(vídeo|video|mídia)", re.I)
-TXT_UPLOAD_DONE = re.compile(r"(processando|enviado|concluído|100%)", re.I)
-TXT_PUBLISH = re.compile(r"^(Publicar|Salvar)", re.I)
+TXT_MODULE_CARD = "Mostrar turmas"            # texto presente em cada cartão de módulo
+TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
+TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
+TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
+TXT_PUBLISH = "Publicar"
+TXT_PROGRESS = re.compile(r"\d{1,3}\s?%|Enviando|Carregando", re.I)
 UPLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000  # até 3h para vídeos grandes
 # ---------------------------------------------------------------------------
 
@@ -52,34 +51,68 @@ def module_urls():
     return [u.strip() for u in re.split(r"[\n,]+", raw) if u.strip()]
 
 
+def _open_new_lesson(page: Page):
+    """Clica no "+" do cartão do módulo e escolhe "Aula"."""
+    name = page.get_by_text(re.compile(rf"^\s*{re.escape(MODULE_NAME)}\s*$", re.I)).first
+    name.scroll_into_view_if_needed()
+    # O cartão é o maior bloco em volta do nome que contém um único "Mostrar turmas".
+    card = name.locator(
+        f"xpath=ancestor::*[count(.//text()[contains(., '{TXT_MODULE_CARD}')]) = 1][last()]"
+    )
+    aula = page.get_by_text(TXT_MENU_AULA, exact=True).first
+    # O cartão tem alguns botões sem texto (+, ⋮); testa até abrir o menu com "Aula".
+    buttons = card.get_by_role("button").filter(has_not_text=TXT_MODULE_CARD)
+    for i in range(buttons.count()):
+        buttons.nth(i).click()
+        try:
+            aula.wait_for(timeout=3000)
+            aula.click()
+            return
+        except Exception:
+            page.keyboard.press("Escape")
+    raise RuntimeError(f"Não achei o botão '+' do módulo {MODULE_NAME}")
+
+
 def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
     page.goto(module_url)
     page.wait_for_load_state("networkidle")
-    _shot(page, f"{tag}-02-modulo")
+    _shot(page, f"{tag}-02-curso")
 
-    # Acha o cartão do módulo pelo nome e clica no botão "+" dele.
-    title = page.get_by_text(re.compile(rf"^\s*{re.escape(MODULE_NAME)}\s*$", re.I)).first
-    card = title.locator(f"xpath=ancestor::*[contains(., '{TXT_MODULE_CARD}')][1]")
-    card.get_by_role("button").first.click()
-    page.wait_for_timeout(1500)
-    choice = page.get_by_text(TXT_ADD_CONTENT).first
-    if choice.count():
-        choice.click()
-    page.get_by_label(TXT_TITLE_LABEL).first.fill(lesson_title)
+    _open_new_lesson(page)
+    page.get_by_placeholder(TXT_TITLE_PLACEHOLDER).fill(lesson_title)
     _shot(page, f"{tag}-03-titulo")
 
-    with page.expect_file_chooser() as fc:
-        page.get_by_text(TXT_UPLOAD_VIDEO).first.click()
-    fc.value.set_files(video_path)
-    page.get_by_text(TXT_UPLOAD_DONE).first.wait_for(timeout=UPLOAD_TIMEOUT_MS)
-    _shot(page, f"{tag}-04-upload")
+    file_input = page.locator("input[type=file]")
+    if file_input.count():
+        file_input.first.set_input_files(video_path)
+    else:
+        with page.expect_file_chooser() as fc:
+            page.get_by_role("button", name=TXT_SELECT_FILE).click()
+        fc.value.set_files(video_path)
+    page.wait_for_timeout(5000)
+    _shot(page, f"{tag}-04-enviando")
+
+    # Espera o envio terminar: botão Publicar habilitado e sem indicador de progresso.
+    publish = page.get_by_role("button", name=TXT_PUBLISH, exact=True)
+    page.wait_for_function(
+        """([label, pattern]) => {
+            const re = new RegExp(pattern, 'i');
+            const btn = [...document.querySelectorAll('button')].find(b => b.innerText.trim() === label);
+            return btn && !btn.disabled && !re.test(document.body.innerText);
+        }""",
+        arg=[TXT_PUBLISH, TXT_PROGRESS.pattern],
+        timeout=UPLOAD_TIMEOUT_MS,
+        polling=5000,
+    )
+    _shot(page, f"{tag}-05-pronto")
 
     if dry_run:
         print(f"DRY_RUN ({tag}): parei antes de publicar.")
         return
-    page.get_by_role("button", name=TXT_PUBLISH).first.click()
+    publish.click()
     page.wait_for_load_state("networkidle")
-    _shot(page, f"{tag}-05-publicado")
+    page.wait_for_timeout(5000)
+    _shot(page, f"{tag}-06-publicado")
 
 
 def publish_lesson(video_path: str, lesson_title: str, targets, dry_run: bool = False, on_done=None):
