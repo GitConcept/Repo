@@ -22,7 +22,7 @@ def find_recordings(folder_id: str, name_filter: str, days_back: int = 7):
     since = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%S")
     q = [
         f"'{folder_id}' in parents",
-        "mimeType contains 'video/'",
+        "(mimeType contains 'video/' or mimeType = 'application/vnd.google-apps.shortcut')",
         "trashed = false",
         f"createdTime > '{since}'",
     ]
@@ -31,12 +31,21 @@ def find_recordings(folder_id: str, name_filter: str, days_back: int = 7):
         q.append(f"name contains '{safe}'")
     resp = _service().files().list(
         q=" and ".join(q),
-        fields="files(id, name, createdTime, size)",
+        fields="files(id, name, createdTime, size, mimeType, shortcutDetails)",
         orderBy="createdTime",
         supportsAllDrives=True,
         includeItemsFromAllDrives=True,
     ).execute()
-    return resp.get("files", [])
+    files = []
+    for f in resp.get("files", []):
+        if f["mimeType"] == "application/vnd.google-apps.shortcut":
+            # Atalho: usa o vídeo original (o robô precisa ter acesso a ele também).
+            target = f.get("shortcutDetails", {})
+            if not target.get("targetMimeType", "").startswith("video/"):
+                continue
+            f["id"] = target["targetId"]
+        files.append(f)
+    return files
 
 
 def download(file_id: str, dest_path: str):
