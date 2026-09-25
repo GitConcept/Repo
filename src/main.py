@@ -33,6 +33,11 @@ def main():
     ]
     if not pending:
         print("Nenhuma gravação nova. Nada a fazer.")
+        # Diagnóstico: o que o robô enxerga na pasta, sem o filtro de nome.
+        visiveis = drive.find_recordings(folder_id, "", days_back=30)
+        print(f"Vídeos dos últimos 30 dias visíveis na pasta: {len(visiveis)}")
+        for r in visiveis[-10:]:
+            print(f"  - {r['name']} ({r['createdTime']})")
         return
 
     os.makedirs("downloads", exist_ok=True)
