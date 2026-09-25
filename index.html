@@ -526,7 +526,6 @@ function renderLive() {
       <div class="stats">
         <div class="stat"><b id="setNum"></b><small>séries feitas</small></div>
         <div class="stat"><b>${e.sets}</b><small>meta</small></div>
-        <div class="stat"><b id="total">00:00</b><small>tempo em exercício</small></div>
       </div>
       <div class="actions" id="actions"></div>
     </div>`;
@@ -568,12 +567,10 @@ function update(firstPaint) {
     shown = fmt(el);
     frac = (el % (WORK_RING_SECONDS * 1000)) / (WORK_RING_SECONDS * 1000);
     if (el >= WORK_RING_SECONDS * 1000 && frac < 0.01) frac = 1;
-    document.getElementById("total").textContent = fmt(L.workAccum + el);
   } else {
     const left = L.restEnd - now;
     shown = fmt(left + 999);
     frac = 1 - left / (REST_SECONDS * 1000);
-    document.getElementById("total").textContent = fmt(L.workAccum);
   }
   document.getElementById("time").textContent = shown;
   document.getElementById("prog").setAttribute("stroke-dashoffset", C * (1 - Math.min(1, Math.max(0, frac))));
