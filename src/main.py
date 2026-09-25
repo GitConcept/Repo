@@ -64,7 +64,8 @@ def main():
             with open(STATE_FILE, "w") as f:
                 json.dump(state, f, indent=2)
 
-        path = os.path.join("downloads", "live.mp4")
+        # Nome do arquivo = título da aula, para achar fácil na biblioteca da Hotmart.
+        path = os.path.join("downloads", re.sub(r"[^\w -]", "-", title).replace("|", "-") + ".mp4")
         try:
             drive.download(rec["id"], path)
             hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)

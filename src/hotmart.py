@@ -20,6 +20,8 @@ TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
 TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
 TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
 TXT_PUBLISH = "Publicar"
+TXT_SEND_FROM_PC = re.compile(r"Enviar do computador", re.I)
+TXT_ADD_MEDIA = re.compile(r"^\s*Adicionar m[íi]dia\s*$", re.I)
 TXT_PLAYER_PROMO = re.compile(r"Player de v[íi]deo da Hotmart", re.I)
 TXT_MEDIA_EMPTY = re.compile(r"^\s*0\s*/\s*3\s*$")
 TXT_PROGRESS = re.compile(r"\d{1,3}\s?%|Enviando|Carregando", re.I)
@@ -120,17 +122,42 @@ def _close_player_promo(page: Page) -> bool:
 
 
 def _choose_file(page: Page, video_path: str):
-    """Clica em "Selecionar arquivo" e escolhe o vídeo; fecha o aviso do player se ele aparecer."""
+    """Envia o vídeo pela janela "Selecionar mídia" (Hotmart Player) e adiciona à aula.
+
+    Caminho: Selecionar arquivo → (fecha o aviso do Player, sem ativar) → Enviar do computador
+    → escolhe o arquivo → espera o envio → Adicionar mídia.
+    """
+    page.get_by_role("button", name=TXT_SELECT_FILE).click()
+    send = page.get_by_text(TXT_SEND_FROM_PC).first
     for _ in range(2):
         try:
-            with page.expect_file_chooser(timeout=10_000) as fc:
-                page.get_by_role("button", name=TXT_SELECT_FILE).click()
-            fc.value.set_files(video_path)
-            return
+            send.wait_for(state="visible", timeout=10_000)
+            break
         except Exception:
             if not _close_player_promo(page):
                 raise
-    raise RuntimeError("A janela de escolher arquivo não abriu.")
+            page.get_by_role("button", name=TXT_SELECT_FILE).click()
+    _shot(page, "04a-biblioteca")
+    with page.expect_file_chooser(timeout=30_000) as fc:
+        send.click()
+    fc.value.set_files(video_path)
+    _shot(page, "04b-enviando")
+
+    # Espera o envio para a biblioteca terminar e o botão "Adicionar mídia" liberar.
+    add = page.get_by_role("button", name=TXT_ADD_MEDIA)
+    file_name = os.path.basename(video_path)
+    deadline_ms = UPLOAD_TIMEOUT_MS
+    waited = 0
+    while not add.is_enabled():
+        if waited >= deadline_ms:
+            raise RuntimeError("O envio do vídeo para a Hotmart não terminou a tempo.")
+        # Se o arquivo enviado aparecer na lista sem estar selecionado, seleciona.
+        item = page.get_by_text(file_name, exact=True).first
+        if item.is_visible() and not TXT_PROGRESS.search(item.locator("xpath=..").inner_text()):
+            item.click()
+        page.wait_for_timeout(10_000)
+        waited += 10_000
+    add.click()
 
 
 def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
