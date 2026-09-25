@@ -56,7 +56,17 @@ def main():
         title = f"LIVE | DIA {live_date(rec):%d/%m/%Y}"
         print(f"Gravação: {rec['name']} -> aula '{title}'")
 
+        # Cursos (1, 2, ...) já publicados à mão para esta live: só registra, não publica de novo.
+        for n in re.findall(r"\d+", os.environ.get("ALREADY_DONE_COURSES", "")):
+            if 1 <= int(n) <= len(urls) and key(rec["id"], urls[int(n) - 1]) not in done:
+                print(f"Curso {n} marcado como já publicado à mão.")
+                state["processed"].append(key(rec["id"], urls[int(n) - 1]))
+                done.add(key(rec["id"], urls[int(n) - 1]))
+                with open(STATE_FILE, "w") as f:
+                    json.dump(state, f, indent=2)
         targets = [(key(rec["id"], u), u) for u in urls if key(rec["id"], u) not in done]
+        if not targets:
+            continue
 
         def mark_done(k):
             state["processed"].append(k)
