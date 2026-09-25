@@ -12,6 +12,10 @@ on:
         description: "Testar sem publicar (para antes do botão Publicar)"
         type: boolean
         default: true
+      pausar_no_upload:
+        description: "Parar na tela de envio do vídeo e esperar 30 min (para fazer à mão)"
+        type: boolean
+        default: false
 
 concurrency:
   group: live-hotmart
@@ -43,6 +47,7 @@ jobs:
           START_DATE: ${{ vars.START_DATE }}
           HOTMART_MODULE_URL: ${{ secrets.HOTMART_MODULE_URL }}
           HOTMART_MODULE_NAME: ${{ vars.HOTMART_MODULE_NAME || 'LIVES SEMANAIS' }}
+          PAUSE_AT_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.pausar_no_upload || 'false' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         working-directory: src
         run: |

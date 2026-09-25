@@ -20,6 +20,7 @@ TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
 TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
 TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
 TXT_PUBLISH = "Publicar"
+PAUSE_MINUTES = 30
 TXT_DROPZONE = re.compile(r"Arraste ou solte sua m[íi]dia", re.I)
 TXT_SEND_FROM_PC = re.compile(r"Enviar do computador", re.I)
 TXT_ADD_MEDIA = re.compile(r"^\s*Adicionar m[íi]dia\s*$", re.I)
@@ -143,6 +144,13 @@ def _choose_file(page: Page, video_path: str):
     # Abre uma área "Arraste ou solte sua mídia" com outro "Selecionar arquivo".
     page.get_by_text(TXT_DROPZONE).first.wait_for(timeout=15_000)
     _shot(page, "04b-area-envio")
+    if os.environ.get("PAUSE_AT_UPLOAD", "false").lower() == "true":
+        # Modo de observação: para aqui e deixa você fazer o envio à mão na janela aberta.
+        print("PAUSADO na área de envio. Faça o envio manualmente na janela do navegador.")
+        for i in range(PAUSE_MINUTES * 2):
+            page.wait_for_timeout(30_000)
+            _shot(page, f"05-manual-{i:03d}")
+        raise RuntimeError("Fim do modo de observação (nada foi publicado pelo robô).")
     # Usa o campo de arquivo da área de envio (o último da página; ignora o de imagem).
     inputs = [i for i in page.locator("input[type=file]").all()
               if "image" not in (i.get_attribute("accept") or "") or "video" in (i.get_attribute("accept") or "")]
