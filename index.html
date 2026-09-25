@@ -244,7 +244,9 @@ function editWeight(wid, i) {
   const m = document.createElement("div");
   m.className = "modal";
   m.innerHTML = `<div class="sheet">
-    <h3>Peso · ${esc(e.name)}</h3><p>Ex.: 55 kg · 20 - 20 kg · 40 kg / H 24 kg</p>
+    <h3>Editar peso</h3><p>${esc(e.name)}<br>
+    Digite o peso que você usa neste exercício. Se tiver um peso para cada lado (halteres, máquina), escreva os dois separados por traço, como <b>20 - 20 kg</b>.
+    Os botões abaixo somam ou tiram peso de todos os números de uma vez.<br>Peso original do treino: <b>${esc(e.weight)}</b></p>
     <input id="wIn" value="${esc(weightOf(wid, i))}" autocomplete="off">
     <div class="steps">${[-5, -2.5, 2.5, 5].map(d => `<button data-d="${d}">${d > 0 ? "+" : ""}${String(d).replace(".", ",")}</button>`).join("")}</div>
     <button class="btn orange" id="wOk">Salvar</button>
