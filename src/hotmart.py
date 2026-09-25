@@ -20,6 +20,7 @@ TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
 TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
 TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
 TXT_PUBLISH = "Publicar"
+TXT_DROPZONE = re.compile(r"Arraste ou solte sua m[íi]dia", re.I)
 TXT_SEND_FROM_PC = re.compile(r"Enviar do computador", re.I)
 TXT_ADD_MEDIA = re.compile(r"^\s*Adicionar m[íi]dia\s*$", re.I)
 TXT_PLAYER_PROMO = re.compile(r"Player de v[íi]deo da Hotmart", re.I)
@@ -138,10 +139,21 @@ def _choose_file(page: Page, video_path: str):
                 raise
             page.get_by_role("button", name=TXT_SELECT_FILE).click()
     _shot(page, "04a-biblioteca")
-    with page.expect_file_chooser(timeout=30_000) as fc:
-        send.click()
-    fc.value.set_files(video_path)
-    _shot(page, "04b-enviando")
+    send.click()
+    # Abre uma área "Arraste ou solte sua mídia" com outro "Selecionar arquivo".
+    page.get_by_text(TXT_DROPZONE).first.wait_for(timeout=15_000)
+    _shot(page, "04b-area-envio")
+    # Usa o campo de arquivo da área de envio (o último da página; ignora o de imagem).
+    inputs = [i for i in page.locator("input[type=file]").all()
+              if "image" not in (i.get_attribute("accept") or "") or "video" in (i.get_attribute("accept") or "")]
+    if inputs:
+        inputs[-1].set_input_files(video_path)
+    else:
+        with page.expect_file_chooser(timeout=30_000) as fc:
+            page.get_by_role("button", name=TXT_SELECT_FILE).last.click()
+        fc.value.set_files(video_path)
+    page.wait_for_timeout(5000)
+    _shot(page, "04c-enviando")
 
     # Espera o envio para a biblioteca terminar e o botão "Adicionar mídia" liberar.
     add = page.get_by_role("button", name=TXT_ADD_MEDIA)
@@ -157,6 +169,8 @@ def _choose_file(page: Page, video_path: str):
             item.click()
         page.wait_for_timeout(10_000)
         waited += 10_000
+        if waited % 60_000 == 0:
+            _shot(page, "04d-aguardando-envio")
     add.click()
 
 
