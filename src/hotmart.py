@@ -20,6 +20,7 @@ TXT_MENU_AULA = "Aula"                        # opção do menu do botão "+"
 TXT_TITLE_PLACEHOLDER = re.compile(r"Digite o t[íi]tulo", re.I)
 TXT_SELECT_FILE = re.compile(r"Selecionar arquivo", re.I)
 TXT_PUBLISH = "Publicar"
+TXT_PLAYER_PROMO = re.compile(r"Player de v[íi]deo da Hotmart", re.I)
 TXT_MEDIA_EMPTY = re.compile(r"^\s*0\s*/\s*3\s*$")
 TXT_PROGRESS = re.compile(r"\d{1,3}\s?%|Enviando|Carregando", re.I)
 UPLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000  # até 3h para vídeos grandes
@@ -103,6 +104,34 @@ def _open_new_lesson(page: Page):
     raise RuntimeError(f"Não achei o botão '+' do módulo {MODULE_NAME}")
 
 
+def _close_player_promo(page: Page) -> bool:
+    """Fecha (sem ativar) o aviso "Player de vídeo da Hotmart", se estiver aberto."""
+    promo = page.get_by_text(TXT_PLAYER_PROMO).first
+    if not promo.is_visible():
+        return False
+    page.keyboard.press("Escape")
+    if promo.is_visible():
+        # Botão de fechar (×) do aviso: nunca o "Ativar".
+        dialog = promo.locator("xpath=ancestor::*[.//button][1]")
+        dialog.get_by_role("button").filter(has_not_text=re.compile("Ativar", re.I)).first.click()
+    promo.wait_for(state="hidden", timeout=10_000)
+    return True
+
+
+def _choose_file(page: Page, video_path: str):
+    """Clica em "Selecionar arquivo" e escolhe o vídeo; fecha o aviso do player se ele aparecer."""
+    for _ in range(2):
+        try:
+            with page.expect_file_chooser(timeout=10_000) as fc:
+                page.get_by_role("button", name=TXT_SELECT_FILE).click()
+            fc.value.set_files(video_path)
+            return
+        except Exception:
+            if not _close_player_promo(page):
+                raise
+    raise RuntimeError("A janela de escolher arquivo não abriu.")
+
+
 def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_title: str, dry_run: bool, tag: str):
     page.goto(module_url, wait_until="domcontentloaded")
     _dismiss_cookie_banner(page)
@@ -118,9 +147,7 @@ def _publish_in_module(page: Page, module_url: str, video_path: str, lesson_titl
     if video_input.count():
         video_input.first.set_input_files(video_path)
     else:
-        with page.expect_file_chooser() as fc:
-            page.get_by_role("button", name=TXT_SELECT_FILE).click()
-        fc.value.set_files(video_path)
+        _choose_file(page, video_path)
     # Confirma que o envio começou: o contador de mídias sai de "0/3".
     page.get_by_text(TXT_MEDIA_EMPTY).wait_for(state="hidden", timeout=120_000)
     page.wait_for_timeout(5000)
