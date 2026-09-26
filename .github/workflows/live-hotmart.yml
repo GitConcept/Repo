@@ -35,13 +35,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Usa o Python do próprio Mac, num ambiente isolado (.venv) dentro da pasta de trabalho.
+      # Impede o Mac de entrar em repouso enquanto o robô trabalha (encerrado no fim do job).
+      - name: Manter o Mac acordado
+        run: nohup caffeinate -i -t 18000 >/dev/null 2>&1 &
+
+      # Usa o Python do próprio Mac num ambiente fixo fora da pasta de trabalho, para não
+      # reinstalar tudo a cada checagem (só instala de novo se requirements.txt mudar).
       - name: Instalar dependências
         run: |
-          python3 -m venv .venv
-          .venv/bin/pip install -q -r requirements.txt
-          .venv/bin/python -m playwright install chromium
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          VENV="$HOME/.automacao-lives/venv"
+          if ! cmp -s requirements.txt "$VENV/requirements.txt"; then
+            rm -rf "$VENV"
+            python3 -m venv "$VENV"
+            "$VENV/bin/pip" install -q -r requirements.txt
+            "$VENV/bin/python" -m playwright install chromium
+            cp requirements.txt "$VENV/requirements.txt"
+          fi
+          echo "$VENV/bin" >> "$GITHUB_PATH"
 
       - name: Drive -> Hotmart
         env:
