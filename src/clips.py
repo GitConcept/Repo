@@ -3,7 +3,8 @@
 Padrão visual (inspirado no perfil do Gabriel):
   - GANCHO: texto grande, amarelo, em caixa alta, no topo, nos primeiros segundos;
   - DESTAQUE: frase-chave em texto médio, bold, amarelo, no meio do corte;
-  - LEGENDA: palavras brancas com contorno preto, palavra falada em amarelo, embaixo.
+  - GANCHO: última palavra em vermelho, como o "LIVRO" do "Te indicando livro";
+  - LEGENDA: texto branco, sans limpa, frase normal (não caixa alta), sombra suave, ~70% da altura.
 Tudo em código (ffmpeg + faster-whisper), sem programa de edição.
 """
 import os
@@ -12,7 +13,8 @@ import shutil
 import subprocess
 
 # Ajuste fino do padrão visual num lugar só.
-FONT = os.environ.get("CLIP_FONT", "Impact")
+FONT = os.environ.get("CLIP_FONT", "Impact")  # gancho e destaque
+CAPTION_FONT = os.environ.get("CLIP_CAPTION_FONT", "Helvetica Neue")  # legenda comum, sans limpa como a do Gabriel
 YELLOW = "&H0000C4FF&"  # ASS usa BGR: FFC400
 WHITE = "&H00FFFFFF&"
 BLACK = "&H00000000&"
@@ -110,7 +112,7 @@ def _hook(sents):
     """Gancho: a frase de abertura enxuta (até 7 palavras) ou a de maior 'força'."""
     best = max(sents[:3], key=lambda s: _score([s]))
     ws = [w["w"] for w in best["words"]]
-    return " ".join(ws[:7]).strip(" ,;:") + ("…" if len(ws) > 7 else "")
+    return " ".join(ws[:5]).strip(" ,;:") + ("…" if len(ws) > 5 else "")
 
 
 def _highlight(sents):
@@ -148,32 +150,40 @@ WrapStyle: 2
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Hook,{FONT},135,{YELLOW},{YELLOW},{BLACK},{BLACK},0,0,0,0,100,100,0,0,1,6,5,8,60,60,190,1
 Style: Destaque,{FONT},96,{YELLOW},{YELLOW},{BLACK},{BLACK},0,0,0,0,100,100,0,0,1,6,4,5,70,70,0,1
-Style: Legenda,{FONT},74,{WHITE},{WHITE},{BLACK},{BLACK},0,0,0,0,100,100,0,0,1,6,3,2,80,80,330,1
+Style: Legenda,{CAPTION_FONT},64,{WHITE},{WHITE},{BLACK},&H80000000&,-1,0,0,0,100,100,0,0,1,1.5,4,2,90,90,500,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     ev = []
     hook = _hook(sents)
-    ev.append(f"Dialogue: 2,{_t(0.2)},{_t(HOOK_SECONDS)},Hook,,0,0,0,,{{\\fad(150,250)}}" + r"\N".join(_wrap(hook.upper(), 12)))
+    hook_lines = _wrap(hook.upper(), 14)
+    if hook_lines and len(hook.split()) > 1:
+        head_, _, last = hook_lines[-1].rpartition(" ")
+        hook_lines[-1] = (head_ + " " if head_ else "") + f"{{\\c{RED}}}{last}"
+    ev.append(f"Dialogue: 2,{_t(0.2)},{_t(HOOK_SECONDS)},Hook,,0,0,0,,{{\\fad(150,250)}}" + r"\N".join(hook_lines))
     hl = _highlight(sents)
     hs = hl["s"] - t0
     hl_txt = " ".join(w["w"] for w in hl["words"]).strip(" ,;:")
     ev.append(f"Dialogue: 2,{_t(hs)},{_t(hs + HIGHLIGHT_SECONDS)},Destaque,,0,0,0,,{{\\fad(150,200)}}" + r"\N".join(_wrap(hl_txt.upper(), 16)))
 
+    # Legenda por frase curta (até 5 palavras / 32 letras), texto inteiro de uma vez, sem karaokê.
     words = [w for s in sents for w in s["words"]]
-    # Blocos de até 4 palavras; dentro do bloco, a palavra falada fica amarela.
-    for k in range(0, len(words), 4):
-        block = words[k:k + 4]
-        for idx, cur in enumerate(block):
-            start = cur["s"] - t0
-            end = (block[idx + 1]["s"] if idx + 1 < len(block) else cur["e"]) - t0
-            end = max(end, start + 0.12)
-            parts = []
-            for m, w in enumerate(block):
-                color = YELLOW if m == idx else WHITE
-                parts.append(f"{{\\c{color}}}{w['w'].strip(' ,;:.')}")
-            ev.append(f"Dialogue: 1,{_t(start)},{_t(end)},Legenda,,0,0,0,," + " ".join(parts))
+    blocks, cur = [], []
+    for w in words:
+        if cur and (len(cur) >= 5 or len(" ".join(x["w"] for x in cur + [w])) > 32
+                    or re.search(r"[.?!]$", cur[-1]["w"])):
+            blocks.append(cur)
+            cur = []
+        cur.append(w)
+    if cur:
+        blocks.append(cur)
+    for i, block in enumerate(blocks):
+        start = block[0]["s"] - t0
+        nxt = blocks[i + 1][0]["s"] - t0 if i + 1 < len(blocks) else block[-1]["e"] - t0
+        end = min(max(block[-1]["e"] - t0 + 0.15, start + 0.4), nxt)
+        text = " ".join(w["w"].strip() for w in block)
+        ev.append(f"Dialogue: 1,{_t(start)},{_t(end)},Legenda,,0,0,0,,{text}")
     return head + "\n".join(ev) + "\n"
 
 
