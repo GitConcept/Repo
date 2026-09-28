@@ -6,6 +6,7 @@ import sys
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+import clips
 import drive
 import hotmart
 
@@ -27,6 +28,8 @@ def log_activity(status, title, detail=""):
         print(f"Aviso: não consegui registrar a atividade: {e}")
 
 
+CLIPS_ENABLED = os.environ.get("CLIPS_ENABLED", "true").lower() == "true"
+CLIPS_DIR = os.path.expanduser(os.environ.get("CLIPS_DIR", "~/.automacao-lives/cortes"))
 START_DATE = date.fromisoformat(os.environ.get("START_DATE") or "2026-09-24")
 
 
@@ -53,9 +56,13 @@ def main():
         # Uma entrada por gravação + módulo: se um curso falhar, o outro não é repetido.
         return f"{rec_id}|{url}"
 
+    def clips_key(rec_id):
+        return f"{rec_id}|cortes"
+
     pending = [
         r for r in drive.find_recordings(folder_id, name_filter, days_back=14)
-        if live_date(r) >= START_DATE and any(key(r["id"], u) not in done for u in urls)
+        if live_date(r) >= START_DATE
+        and (any(key(r["id"], u) not in done for u in urls) or (CLIPS_ENABLED and clips_key(r["id"]) not in done))
     ]
     if not pending:
         print("Nenhuma gravação nova. Nada a fazer.")
@@ -80,7 +87,8 @@ def main():
                 with open(STATE_FILE, "w") as f:
                     json.dump(state, f, indent=2)
         targets = [(key(rec["id"], u), u) for u in urls if key(rec["id"], u) not in done]
-        if not targets:
+        need_clips = CLIPS_ENABLED and clips_key(rec["id"]) not in done
+        if not targets and not need_clips:
             continue
 
         published = []
@@ -96,14 +104,28 @@ def main():
         path = os.path.join("downloads", re.sub(r"[^\w -]", "-", title).replace("|", "-") + ".mp4")
         try:
             drive.download(rec["id"], path)
-            hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)
+            if targets:
+                hotmart.publish_lesson(path, title, targets, dry_run=dry_run, on_done=mark_done)
+            if targets and not dry_run:
+                log_activity("publicada", title, f"Publicada em {len(targets)} curso(s) na Hotmart.")
+            # Cortes para o Instagram: depois da Hotmart, e uma falha aqui não derruba a publicação.
+            if need_clips:
+                try:
+                    out_dir = os.path.join(CLIPS_DIR, f"{live_date(rec):%Y-%m-%d}")
+                    files = clips.make_clips(path, out_dir)
+                    if not dry_run:
+                        state["processed"].append(clips_key(rec["id"]))
+                        done.add(clips_key(rec["id"]))
+                        with open(STATE_FILE, "w") as f:
+                            json.dump(state, f, indent=2)
+                        log_activity("cortes", title, f"{len(files)} cortes gerados em {out_dir}")
+                except Exception as e:
+                    print(f"Aviso: cortes falharam: {e}")
+                    log_activity("erro", title, f"Cortes falharam: {e}"[:500])
         except Exception as e:
             if not dry_run:
                 log_activity("erro", title, f"{len(published)} de {len(targets)} curso(s) publicados. Erro: {e}"[:500])
             raise
-        else:
-            if not dry_run:
-                log_activity("publicada", title, f"Publicada em {len(targets)} curso(s) na Hotmart.")
         finally:
             # Apaga o vídeo do Mac mesmo se der erro, para não ocupar espaço.
             if os.path.exists(path):

@@ -63,6 +63,7 @@ jobs:
           HOTMART_MODULE_NAME: ${{ vars.HOTMART_MODULE_NAME || 'LIVES SEMANAIS' }}
           PAUSE_AT_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.pausar_no_upload || 'false' }}
           ALREADY_DONE_COURSES: ${{ inputs.cursos_ja_publicados }}
+          CLIPS_DIR: ${{ github.workspace }}/src/cortes
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         working-directory: src
         run: |
@@ -81,10 +82,18 @@ jobs:
           path: src/debug/
           if-no-files-found: ignore
 
+      - name: Salvar cortes do Instagram
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cortes-instagram
+          path: src/cortes/
+          if-no-files-found: ignore
+
       - name: Registrar gravação processada
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add processed.json
-          git diff --cached --quiet || (git commit -m "Registra live enviada à Hotmart" && git pull --rebase && git push)
+          git diff --cached --quiet || (git commit -m "Registra live processada" && git pull --rebase && git push)
