@@ -30,6 +30,7 @@ def log_activity(status, title, detail=""):
 
 CLIPS_ENABLED = os.environ.get("CLIPS_ENABLED", "true").lower() == "true"
 CLIPS_DIR = os.path.expanduser(os.environ.get("CLIPS_DIR", "~/.automacao-lives/cortes"))
+DAYS_BACK = int(os.environ.get("DAYS_BACK") or 14)
 START_DATE = date.fromisoformat(os.environ.get("START_DATE") or "2026-09-24")
 
 
@@ -60,7 +61,7 @@ def main():
         return f"{rec_id}|cortes"
 
     pending = [
-        r for r in drive.find_recordings(folder_id, name_filter, days_back=14)
+        r for r in drive.find_recordings(folder_id, name_filter, days_back=DAYS_BACK)
         if live_date(r) >= START_DATE
         and (any(key(r["id"], u) not in done for u in urls) or (CLIPS_ENABLED and clips_key(r["id"]) not in done))
     ]

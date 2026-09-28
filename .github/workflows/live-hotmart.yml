@@ -59,6 +59,7 @@ jobs:
           DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
           MEET_NAME_FILTER: ${{ vars.MEET_NAME_FILTER }}
           START_DATE: ${{ vars.START_DATE }}
+          DAYS_BACK: ${{ vars.DAYS_BACK }}
           HOTMART_MODULE_URL: ${{ secrets.HOTMART_MODULE_URL }}
           HOTMART_MODULE_NAME: ${{ vars.HOTMART_MODULE_NAME || 'LIVES SEMANAIS' }}
           PAUSE_AT_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.pausar_no_upload || 'false' }}
