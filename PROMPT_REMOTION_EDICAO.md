@@ -57,12 +57,15 @@ Regras:
 Referência: a legenda **não fica travada embaixo**. Ela é posicionada no quadro a cada bloco.
 - Blocos de **1–4 palavras** (frase curta), alinhados ao ritmo da fala. Nunca linha longa. Uma linha só.
 - **Fonte**: sans neutra/grotesca em negrito (Inter ou similar), ~40–46 px em 1080p, branca, **tracking bem apertado (-0.03em)**, sombra suave `0 2px 10px rgba(0,0,0,.5)`. Caixa normal.
-- **Posição por bloco** (campo `slot`), alternando de forma natural:
-  - `chest` — abaixo do queixo, sobre o peito (padrão, ~50% dos blocos).
-  - `left` / `right` — **no espaço vazio lateral** ao lado do rosto/ombro, na altura do rosto ou levemente abaixo (aproveita o espaço horizontal da referência).
-  - `center` — centro da tela (usado sobre B-roll).
-  - Regras: **nunca cobrir olhos e boca**; usar as zonas de `framing.json` (mudam a cada enquadramento, pois o rosto se move quando escala); mesma posição pode repetir 2–3 blocos seguidos, depois muda; trocar de lado com a fala/gesto (ex.: quando ele aponta ou olha para um lado).
-  - Alinhamento coerente com o lado (texto à esquerda alinha à direita do bloco perto do rosto, etc.).
+- **Posição por bloco: dinâmica, irregular e NUNCA cíclica.** A legenda não usa "slots" fixos nem alterna entre 3 lugares. Cada bloco recebe uma **posição contínua** `(x, y)` sorteada dentro da **área livre** do enquadramento atual (quadro inteiro menos `faceZone` com margem de ~40 px, menos as bordas de segurança de 6%). Regras:
+  - **Sorteio com semente** (`plan.config.seed`, para o render ser reproduzível), com distribuição **ponderada, não uniforme**: ~35% região do peito/abaixo do queixo, ~45% espaço lateral (esquerda/direita, altura do rosto ao ombro, com lado escolhido ao acaso), ~20% posições "soltas" (canto superior lateral, meio da lateral, perto do ombro, um pouco acima da cabeça se houver espaço). Pesos ajustáveis em `config.captionWeights`.
+  - **Variação contínua**: além da região, aplique jitter de ±3–6% em x e y, para nunca haver duas posições idênticas. Alinhamento do texto (esquerda/centro/direita) acompanha o lado: texto lateral fica encostado no lado do rosto, não centralizado num ponto qualquer.
+  - **Ritmo irregular de repetição**: o tamanho da sequência na mesma região varia (1, 2, 4, 1, 3…): 30% das vezes muda a cada bloco, 40% mantém 2 blocos, 20% mantém 3–4, 10% mantém mais tempo se a fala estiver rápida ou se for uma frase contínua. **Proibido** padrões periódicos (A-B-C-A-B-C ou A-B-A-B). Proibido alternar esquerda/direita em zigue-zague por mais de 2 blocos.
+  - **Quando muda, muda de verdade**: a nova posição deve ficar a pelo menos ~15% da largura ou ~15% da altura da anterior. Quando fica na mesma região, pode deslocar poucos pixels (jitter), como um editor que nudged a legenda.
+  - **Gatilhos que sobrepõem o sorteio** (dão intenção): (a) palavra-chave/número forte → posição mais próxima ao rosto, no lado para onde ele gesticula ou olha; (b) frase que começa após pausa longa ou troca de enquadramento → forçar mudança de região; (c) mão/gesto grande em um lado → texto vai para o lado oposto; (d) mudança de enquadramento → a legenda reposiciona no mesmo frame do corte (é a hora natural de mudar).
+  - **Nunca cobrir olhos e boca**; usar as zonas de `framing.json`, que mudam a cada enquadramento (o rosto se move quando escala). Em `close`, a área lateral é menor: aumentar o peso do peito/abaixo do queixo automaticamente.
+  - Sobre B-roll a legenda também usa posições variadas (terço inferior, centro, laterais), só respeitando margens de segurança.
+  - Sem animação de deslocamento entre posições: o bloco novo simplesmente aparece no novo lugar (corte).
 - **Revelar palavra**: as palavras do bloco aparecem **no frame exato em que são faladas** (corte, sem fade, sem movimento). Opcional: as palavras ainda não faladas do bloco ficam visíveis em cinza (~35% de opacidade) e acendem em branco quando ditas (como "as pessoas amam **comprar**" na referência). Configurável (`captionReveal: "cut" | "dim-ahead"`).
 - **Variante espaçada** (rara, ≤ 1 a cada ~20 s, só em frases de efeito): as palavras do bloco ficam **distantes umas das outras** ("O ······ SEU ······ PRODUTO"), distribuídas na largura, ainda aparecendo no tempo da fala.
 - **Variante serifa** (rara, ≤ 3 por vídeo, frase de impacto curta): serifa condensada em **caixa alta** (Playfair Display / Bodoni Moda / Cormorant), branca, ~48–64 px, tracking apertado. Corte seco.
@@ -104,7 +107,7 @@ Ritmo: alguma mudança visual (enquadramento, B-roll, cartão, P&B) a cada **3�
 ### Schema `edit-plan.json`
 ```ts
 type Plan = {
-  config: { captionReveal: "cut" | "dim-ahead"; brollTarget: [number, number] };
+  config: { seed: number; captionWeights?: { chest: number; side: number; loose: number }; captionReveal: "cut" | "dim-ahead"; brollTarget: [number, number] };
   cuts: { fromMs: number; toMs: number }[];
   framings: { fromMs: number; toMs: number; shot: "wide" | "medium" | "close" }[]; // troca = corte seco
   broll: { startMs: number; endMs: number; source: { type: "image" | "video"; query?: string; path?: string }; treatment?: "none" | "bw"; reason: string }[];
@@ -115,10 +118,10 @@ type Plan = {
     reveal: "word-by-word" | "cut";
   };
   captions: { startMs: number; endMs: number; words: { text: string; startMs: number }[];
-              slot: "chest" | "left" | "right" | "center"; variant?: "default" | "spaced" | "serif" }[];
+              pos: { x: number; y: number; align: "left" | "center" | "right"; region: "chest" | "side-l" | "side-r" | "loose" }; variant?: "default" | "spaced" | "serif" }[];
 };
 ```
-Validações automáticas (falhar o `plan` se quebrar): `blackCard` ≤ 1; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda em `left/right` que invada `faceZone`.
+Validações automáticas (falhar o `plan` se quebrar): `blackCard` ≤ 1; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda invade `faceZone`; **anti-padrão de posição**: rejeitar e re-sortear se as últimas 6 regiões tiverem período 2 ou 3, se a mesma região aparecer > 4 vezes seguidas, ou se a distribuição final de regiões ficar fora de ±15 pontos dos pesos.
 
 ## ASSETS
 - Ordem: (1) `public/assets-library/` (meus arquivos), (2) Pexels/Pixabay/Unsplash (chaves em `.env`), (3) Wikimedia Commons para fotos históricas/pessoas públicas.
@@ -142,9 +145,9 @@ edit-plan.example.json
 - [ ] B-rolls todos em tela cheia; nenhum split.
 - [ ] No máximo 1 cartão preto (pode ser 0).
 - [ ] Todo trecho P&B: entra e sai em corte de enquadramento, volta ao enquadramento anterior, legenda vermelha.
-- [ ] Legendas usam `left/right` quando há espaço; nunca cobrem olhos/boca; sincronia ±2 frames.
+- [ ] Posição das legendas irregular: sem ciclo perceptível, sem zigue-zague, corridas de tamanho variado, reposiciona em trocas de enquadramento; nunca cobre olhos/boca; sincronia ±2 frames. Reportar no relatório o histograma de regiões e as corridas.
 - [ ] `npx remotion still` de 8 frames espalhados: mostra aberto/médio/fechado, B-roll, P&B com legenda vermelha, e cartão preto (se houver).
 - [ ] Relatório final: lista de B-rolls (tempo, query, fonte, licença), placeholders pendentes, decisão sobre o cartão preto (qual frase e por quê, ou por que nenhuma).
 
 ## PRIMEIRO PASSO
-Não faça tudo de uma vez. Ordem: (1) scaffold + `TalkingHead` com 3 enquadramentos por corte, (2) `Captions` com slots, (3) transcrição real, (4) `BRoll` tela cheia, (5) P&B + legenda vermelha, (6) cartão preto, (7) `plan` automático, (8) polimento. Após cada etapa, renderize 10 s e me mostre. Comece confirmando que `public/input.mp4` existe.
+Não faça tudo de uma vez. Ordem: (1) scaffold + `TalkingHead` com 3 enquadramentos por corte, (2) `Captions` com posicionamento sorteado + validador anti-padrão, (3) transcrição real, (4) `BRoll` tela cheia, (5) P&B + legenda vermelha, (6) cartão preto, (7) `plan` automático, (8) polimento. Após cada etapa, renderize 10 s e me mostre. Comece confirmando que `public/input.mp4` existe.
