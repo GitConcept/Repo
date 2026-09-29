@@ -71,6 +71,14 @@ Referência: a legenda **não fica travada embaixo**. Ela é posicionada no quad
 - **Variante serifa** (rara, ≤ 3 por vídeo, frase de impacto curta): serifa condensada em **caixa alta** (Playfair Display / Bodoni Moda / Cormorant), branca, ~48–64 px, tracking apertado. Corte seco.
 - Sincronia: cada palavra em `startMs` do Whisper com adiantamento de 1–2 frames. Nada atrasado.
 
+### 3b. Palavra de destaque sobre o vídeo (rara)
+Referência: "SEU PRODUTO" grande, serifa condensada laranja-avermelhada com glow, sobre a imagem da pessoa.
+- Serve para a **1 ou 2 palavras mais importantes de uma frase forte**. Máx. **3 por vídeo**, espaçadas por ≥ 15 s. Não coincide com o cartão preto, B-roll ou trecho P&B; se coincidir, descartar.
+- **Tipografia**: serifa condensada em **caixa alta** (Bodoni Moda / Playfair Display Condensed / Abril Fatface ou similar), muito maior que a legenda (~150–220 px em 1080p), tracking apertado, cor `#FF4A1C` com glow (`text-shadow: 0 0 18px rgba(255,74,28,.55)`), opacidade 100%.
+- **Posição**: no espaço livre lateral ou sobre o peito/ombro, com o mesmo cálculo de posição livre da legenda (nunca cobre olhos e boca; pode sobrepor parcialmente o corpo, como na referência, mas não o rosto). Sorteada com a mesma semente e a mesma regra anti-padrão (varia de lado).
+- **Tempo**: aparece **no frame em que a palavra é falada** e sai no fim da palavra (ou até 1.2 s depois, no máximo). Corte seco, sem animação. Enquanto está visível, a legenda normal **não repete** essa palavra (mostra só o restante do bloco, ou fica oculta se o bloco inteiro for a palavra).
+- Mesma frase pode ter a legenda normal continuando em branco e a palavra de destaque em laranja ao mesmo tempo.
+
 ### 4. Frase de destaque em fundo preto (MÁX. 1 POR VÍDEO)
 Só usar se houver uma frase realmente impactante/central (tese, virada, gancho, o "print" do vídeo). Se nada merecer, **não use nenhuma**. Nunca mais de uma.
 - Corte seco para **fundo preto** (#0B0809 levemente quente, não #000 puro), ocupando 100% do quadro por **1.5–4 s**, **sem imagem da pessoa** (o áudio segue).
@@ -117,11 +125,12 @@ type Plan = {
     keyword?: { word: string; style: "serif-orange" };
     reveal: "word-by-word" | "cut";
   };
+  emphasis: { startMs: number; endMs: number; text: string; pos: { x: number; y: number; align: "left" | "center" | "right" } }[]; // máx. 3
   captions: { startMs: number; endMs: number; words: { text: string; startMs: number }[];
               pos: { x: number; y: number; align: "left" | "center" | "right"; region: "chest" | "side-l" | "side-r" | "loose" }; variant?: "default" | "spaced" | "serif" }[];
 };
 ```
-Validações automáticas (falhar o `plan` se quebrar): `blackCard` ≤ 1; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda invade `faceZone`; **anti-padrão de posição**: rejeitar e re-sortear se as últimas 6 regiões tiverem período 2 ou 3, se a mesma região aparecer > 4 vezes seguidas, ou se a distribuição final de regiões ficar fora de ±15 pontos dos pesos.
+Validações automáticas (falhar o `plan` se quebrar): `blackCard` ≤ 1; `emphasis` ≤ 3, espaçados ≥ 15 s, nunca dentro de `bw`, `broll` ou `blackCard`; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda invade `faceZone`; **anti-padrão de posição**: rejeitar e re-sortear se as últimas 6 regiões tiverem período 2 ou 3, se a mesma região aparecer > 4 vezes seguidas, ou se a distribuição final de regiões ficar fora de ±15 pontos dos pesos.
 
 ## ASSETS
 - Ordem: (1) `public/assets-library/` (meus arquivos), (2) Pexels/Pixabay/Unsplash (chaves em `.env`), (3) Wikimedia Commons para fotos históricas/pessoas públicas.
@@ -143,11 +152,11 @@ edit-plan.example.json
 - [ ] Nenhum `spring`, nenhum scale/translate/opacity animado, exceto o fade ≤3 frames do cartão preto e o blur-reveal opcional.
 - [ ] Trocas de enquadramento são cortes de 1 frame; nunca zoom animado.
 - [ ] B-rolls todos em tela cheia; nenhum split.
-- [ ] No máximo 1 cartão preto (pode ser 0).
+- [ ] No máximo 1 cartão preto (pode ser 0) e no máximo 3 palavras de destaque laranja sobre o vídeo, sem cobrir o rosto.
 - [ ] Todo trecho P&B: entra e sai em corte de enquadramento, volta ao enquadramento anterior, legenda vermelha.
 - [ ] Posição das legendas irregular: sem ciclo perceptível, sem zigue-zague, corridas de tamanho variado, reposiciona em trocas de enquadramento; nunca cobre olhos/boca; sincronia ±2 frames. Reportar no relatório o histograma de regiões e as corridas.
 - [ ] `npx remotion still` de 8 frames espalhados: mostra aberto/médio/fechado, B-roll, P&B com legenda vermelha, e cartão preto (se houver).
 - [ ] Relatório final: lista de B-rolls (tempo, query, fonte, licença), placeholders pendentes, decisão sobre o cartão preto (qual frase e por quê, ou por que nenhuma).
 
 ## PRIMEIRO PASSO
-Não faça tudo de uma vez. Ordem: (1) scaffold + `TalkingHead` com 3 enquadramentos por corte, (2) `Captions` com posicionamento sorteado + validador anti-padrão, (3) transcrição real, (4) `BRoll` tela cheia, (5) P&B + legenda vermelha, (6) cartão preto, (7) `plan` automático, (8) polimento. Após cada etapa, renderize 10 s e me mostre. Comece confirmando que `public/input.mp4` existe.
+Não faça tudo de uma vez. Ordem: (1) scaffold + `TalkingHead` com 3 enquadramentos por corte, (2) `Captions` com posicionamento sorteado + validador anti-padrão, (3) transcrição real, (4) `BRoll` tela cheia, (5) P&B + legenda vermelha, (6) palavra de destaque sobre o vídeo e cartão preto, (7) `plan` automático, (8) polimento. Após cada etapa, renderize 10 s e me mostre. Comece confirmando que `public/input.mp4` existe.
