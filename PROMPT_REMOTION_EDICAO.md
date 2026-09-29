@@ -120,6 +120,17 @@ Usados para dar peso a uma afirmação, virada ou tom de brincadeira/ironia. Fre
 - SFX e música: só se eu fornecer `public/music.mp3` / `public/sfx/`. Música a -28 dB com ducking sob a voz; SFX só em cartão preto e P&B, muito discretos, opcionais.
 - Áudio: normalizar para -14 LUFS.
 
+### 7. CTA final (entra no fim de TODOS os vídeos)
+Asset pronto: `public/cta.mp4` (arquivo `PDV_CTA_Comunidade_16x9.mp4`). Características medidas: **1920x1080, 30 fps, 8,0 s, fundo creme claro, texto "COMENTE COMUNIDADE PRA RECEBER O LINK ↓" em preto e verde, áudio totalmente mudo** (−91 dB), com animação de digitação própria no primeiro segundo.
+- **É um asset fechado: não editar, não recolorir, não aplicar grade, vinheta, grão, máscara, legenda nem zoom por cima.** A "animação" dele é parte do arquivo e é a única exceção à regra "tudo é corte".
+- **Entrada por corte seco**, em tela cheia (`object-fit: cover` já é 16:9 idêntico), no frame seguinte ao fim do vídeo editado. A duração final do vídeo = duração editada + duração do CTA (`calculateMetadata` deve somar as duas).
+- **Antes do corte**: a última fala do apresentador termina inteira (nunca cortar a última palavra); depois dela, segurar **0,3–0,5 s** de rosto. Os últimos 3 s antes do CTA sem trecho P&B, sem cartão preto e sem palavra de destaque laranja (rosto limpo, enquadramento fixo). Fade de áudio de 6 frames no fim da fala para não cortar seco na cauda.
+- **Áudio durante o CTA**: silêncio (o arquivo é mudo). Se houver `music.mp3`, ela continua e faz fade-out de 1 s dentro do CTA.
+- **fps**: a composição roda no fps do bruto (25). O CTA é 30 fps: deixar o Remotion reamostrar via `<OffthreadVideo>` sem alterar o arquivo; verificar visualmente que não há tranco na digitação do texto.
+- **Cor**: o arquivo é `yuvj420p` (faixa completa). Renderizar um frame do CTA no vídeo final e compará-lo com o frame original do `cta.mp4` (cor do creme e do verde); se houver diferença visível (creme mais claro/escuro, verde deslavado), corrigir com a conversão de faixa de cor (`-vf scale=in_range=pc:out_range=tv` no pré-processamento) e refazer.
+- **Legendas e overlays**: nenhum elemento do vídeo editado aparece durante o CTA (o próprio CTA já contém o texto).
+- Configurável em `plan.cta`: `{ path: "cta.mp4", durationMs: 8000 }`. Padrão: o arquivo inteiro. Não encurtar a menos que eu peça.
+
 ---
 
 ## COMO DECIDIR A EDIÇÃO (etapa `plan`)
@@ -136,6 +147,7 @@ Ritmo: alguma mudança visual (enquadramento, B-roll, cartão, P&B) a cada **3�
 type Plan = {
   config: { seed: number; captionWeights?: { chest: number; side: number; loose: number }; captionReveal: "cut" | "dim-ahead"; brollTarget: [number, number] };
   cuts: { fromMs: number; toMs: number }[];
+  cta: { path: string; durationMs: number };              // sempre presente, ao final
   framings: { fromMs: number; toMs: number; shot: "wide" | "medium" | "close" }[]; // troca = corte seco
   broll: { startMs: number; endMs: number; source: { type: "image" | "video"; query?: string; path?: string }; treatment?: "none" | "bw"; reason: string }[];
   bw: { fromMs: number; toMs: number }[];                 // legenda vermelha nesses trechos
@@ -149,7 +161,7 @@ type Plan = {
               pos: { x: number; y: number; align: "left" | "center" | "right"; region: "chest" | "side-l" | "side-r" | "loose" }; variant?: "default" | "spaced" | "serif" }[];
 };
 ```
-Validações automáticas (falhar o `plan` se quebrar): `blackCard` ≤ 1; `emphasis` ≤ 3, espaçados ≥ 15 s, nunca dentro de `bw`, `broll` ou `blackCard`; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda invade `faceZone`; **anti-padrão de posição**: rejeitar e re-sortear se as últimas 6 regiões tiverem período 2 ou 3, se a mesma região aparecer > 4 vezes seguidas, ou se a distribuição final de regiões ficar fora de ±15 pontos dos pesos.
+Validações automáticas (falhar o `plan` se quebrar): `cta` existe e é o último item da timeline; nenhum elemento (legenda, destaque, P&B, cartão preto) cruza o início do `cta`; a última palavra da transcrição fica inteira antes do `cta`; `blackCard` ≤ 1; `emphasis` ≤ 3, espaçados ≥ 15 s, nunca dentro de `bw`, `broll` ou `blackCard`; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda invade `faceZone`; **anti-padrão de posição**: rejeitar e re-sortear se as últimas 6 regiões tiverem período 2 ou 3, se a mesma região aparecer > 4 vezes seguidas, ou se a distribuição final de regiões ficar fora de ±15 pontos dos pesos.
 
 ## ASSETS
 - Ordem: (1) `public/assets-library/` (meus arquivos), (2) Pexels/Pixabay/Unsplash (chaves em `.env`), (3) Wikimedia Commons para fotos históricas/pessoas públicas.
@@ -168,6 +180,7 @@ edit-plan.example.json
 `<Sequence premountFor={30}>` em todo B-roll. Cada mudança visual é uma `Sequence` própria (corte), nunca uma interpolação.
 
 ## CRITÉRIOS DE ACEITE
+- [ ] CTA de 8 s presente ao final, sem alteração, entrando por corte, com cor idêntica ao original e sem tranco; nenhuma legenda/overlay sobre ele; duração total = editado + 8 s.
 - [ ] Etiqueta de nome da videochamada invisível em todos os frames; grade de cor aplicado; sem tremor de rosto; troca de participante tratada como troca de câmera.
 - [ ] Nenhum `spring`, nenhum scale/translate/opacity animado, exceto o fade ≤3 frames do cartão preto e o blur-reveal opcional.
 - [ ] Trocas de enquadramento são cortes de 1 frame; nunca zoom animado.
