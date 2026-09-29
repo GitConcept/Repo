@@ -24,6 +24,8 @@ Você é um editor de vídeo sênior e engenheiro Remotion. Vou fornecer um víd
 ## PIPELINE (scripts npm)
 1. `npm run transcribe` — extrai áudio (ffmpeg), transcreve com timestamps **por palavra** (Whisper, `pt`, modelo `medium` ou maior) → `public/captions.json`. Revisar a transcrição (nomes próprios, marcas) antes do passo 2.
 2. `npm run framing` — detecta o rosto num frame do bruto (MediaPipe/face-api ou me peça as coordenadas) e grava `framing.json`: bbox do rosto, e as **zonas seguras** de texto (`faceZone`, `leftSpace`, `rightSpace`, `chestZone`) para cada enquadramento (ver 1).
+2b. **Verificação do rosto (obrigatória, o usuário não é técnico)** — depois do `framing`, gere `verify/framing-wide.png`, `framing-medium.png` e `framing-close.png`: um frame real do bruto em cada enquadramento com um **retângulo vermelho desenhado sobre o rosto** e a `faceZone` (com margem) em amarelo. Mostre as 3 imagens e pergunte só: "O retângulo vermelho está cobrindo o rosto inteiro (testa ao queixo) nos 3 enquadramentos? Sim/Não". Só siga para o passo 3 com "Sim". Se "Não", corrija as coordenadas e gere de novo. Explique tudo em português simples, sem jargão.
+   Além disso, teste automático: para o vídeo inteiro, verificar em **todos os frames** (não só amostras) que nenhum texto (legenda ou destaque) intersecta a `faceZone` do enquadramento ativo naquele frame. Se houver colisão, corrigir a posição e repetir. Ao final do render, gerar `verify/legendas-amostra.png`: 12 frames aleatórios do vídeo final em grade, para eu olhar e aprovar visualmente.
 3. `npm run plan` — gera `edit-plan.json` a partir da transcrição (ver "Como decidir a edição").
 4. `npm run assets` — resolve os B-rolls (ver "Assets").
 5. `npm start` (Studio) e `npm run render` (H.264, CRF 18).
@@ -155,6 +157,7 @@ edit-plan.example.json
 - [ ] No máximo 1 cartão preto (pode ser 0) e no máximo 3 palavras de destaque laranja sobre o vídeo, sem cobrir o rosto.
 - [ ] Todo trecho P&B: entra e sai em corte de enquadramento, volta ao enquadramento anterior, legenda vermelha.
 - [ ] Posição das legendas irregular: sem ciclo perceptível, sem zigue-zague, corridas de tamanho variado, reposiciona em trocas de enquadramento; nunca cobre olhos/boca; sincronia ±2 frames. Reportar no relatório o histograma de regiões e as corridas.
+- [ ] Verificação do rosto aprovada por mim (imagens em `verify/`) e teste de colisão texto×rosto passando em todos os frames.
 - [ ] `npx remotion still` de 8 frames espalhados: mostra aberto/médio/fechado, B-roll, P&B com legenda vermelha, e cartão preto (se houver).
 - [ ] Relatório final: lista de B-rolls (tempo, query, fonte, licença), placeholders pendentes, decisão sobre o cartão preto (qual frase e por quê, ou por que nenhuma).
 
