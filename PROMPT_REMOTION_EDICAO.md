@@ -1,138 +1,150 @@
-# Prompt: editor de vídeo estilo "talking head + B-roll + legenda palavra-a-palavra" (Remotion)
+# Prompt: edição horizontal "talking head + B-roll tela cheia + legenda posicionada" (Remotion)
 
-Cole tudo abaixo no Claude Code, dentro de um projeto Remotion vazio (`npx create-video@latest`).
+Cole tudo abaixo no Claude Code, dentro de um projeto Remotion (`npx create-video@latest`, template blank, TypeScript).
+Referência de estilo: `REFERENCIA_4.mp4` (colocar em `reference/` para consulta; **não** é o vídeo a ser editado).
 
 ---
 
 ## PAPEL
-Você é um editor de vídeo sênior de conteúdo vertical (Reels/TikTok/Shorts) e engenheiro Remotion. Vou te dar um vídeo bruto de uma pessoa falando para a câmera. Você deve entregar uma composição Remotion que o transforma em um vídeo editado no estilo descrito abaixo, de forma **automatizada e parametrizável**: transcrição → plano de edição (JSON) → render.
+Você é um editor de vídeo sênior e engenheiro Remotion. Vou fornecer um vídeo bruto horizontal de uma pessoa falando para a câmera. Entregue uma composição Remotion que o transforma em um vídeo editado no estilo abaixo, de forma **automatizada e parametrizável**: transcrição → plano de edição (JSON) → render.
+
+## FILOSOFIA DE EDIÇÃO (leia antes de tudo)
+**Seco e direto. Tudo é corte.** Simula a troca de câmera e a montagem de um editor humano, não um template de motion graphics.
+- **PROIBIDO**: bounce, overshoot, `spring` com sobra, scale-in/scale-out, pop, slide, whip, glitch, dissolve, wipe, zoom animado, Ken Burns, push-in/pull-out, shake. Nada disso, em nenhum elemento (vídeo, B-roll, texto).
+- Toda entrada e saída de elemento visual é **corte de 0 frames** (aparece no frame exato, some no frame exato).
+- Única exceção de movimento permitida: **fade de opacidade de no máximo 3 frames** na saída de textos do tipo "cartão preto" (ver 4). Se em dúvida, corte.
+- Nenhum elemento usa `spring()`. Use `interpolate` somente para o fade citado e para o revelar de palavra descrito em 3.
 
 ## ESPECIFICAÇÕES TÉCNICAS
-- Composição vertical **1080x1920, 30 fps** (aceitar 720x1280 como preview). Duração = duração do vídeo de entrada (`calculateMetadata` lendo do arquivo).
-- Vídeo principal em `public/input.mp4`, usado via `<OffthreadVideo>`. Áudio original sempre mantido.
-- Stack: Remotion 4.x, TypeScript, `@remotion/captions`, `@remotion/google-fonts`, `@remotion/transitions`, `@remotion/media-utils`, `remotion` `spring`/`interpolate`/`Easing`.
-- Toda a edição é dirigida por **um único arquivo `edit-plan.json`** (schema abaixo). Os componentes só renderizam o plano; nenhum tempo fica hard-coded.
+- Composição **horizontal 1920x1080, 30 fps** (a referência é 1276x718 a ~24 fps; o bruto pode variar: use `calculateMetadata` para ler resolução/fps/duração do arquivo e ajustar; se o bruto for 4K, renderizar em 1920x1080).
+- Vídeo bruto em `public/input.mp4` via `<OffthreadVideo>`. Áudio original sempre mantido.
+- Stack: Remotion 4.x, TS, `@remotion/captions`, `@remotion/google-fonts`, `@remotion/install-whisper-cpp`.
+- Toda a edição é dirigida por **`edit-plan.json`**. Componentes só renderizam o plano; nenhum tempo hard-coded.
 
-## PIPELINE (implemente como scripts npm)
-1. `npm run transcribe` — extrai o áudio (ffmpeg) e transcreve com timestamps **por palavra** (Whisper via `@remotion/install-whisper-cpp`, modelo `medium` ou maior, `language: pt`). Saída: `public/captions.json` (formato `Caption[]` do `@remotion/captions`).
-2. `npm run plan` — a partir de `captions.json`, gera `edit-plan.json` (ver "Como decidir a edição"). Se eu fornecer `ANTHROPIC_API_KEY`, use a API para decidir; senão, faça você mesmo na conversa lendo a transcrição e escreva o JSON.
-3. `npm run assets` — para cada `broll` do plano, busca/baixa o asset (ver "Assets") em `public/assets/`.
-4. `npm start` — Remotion Studio para revisão. `npm run render` — MP4 H.264, CRF 18, `--concurrency` adequado.
+## PIPELINE (scripts npm)
+1. `npm run transcribe` — extrai áudio (ffmpeg), transcreve com timestamps **por palavra** (Whisper, `pt`, modelo `medium` ou maior) → `public/captions.json`. Revisar a transcrição (nomes próprios, marcas) antes do passo 2.
+2. `npm run framing` — detecta o rosto num frame do bruto (MediaPipe/face-api ou me peça as coordenadas) e grava `framing.json`: bbox do rosto, e as **zonas seguras** de texto (`faceZone`, `leftSpace`, `rightSpace`, `chestZone`) para cada enquadramento (ver 1).
+3. `npm run plan` — gera `edit-plan.json` a partir da transcrição (ver "Como decidir a edição").
+4. `npm run assets` — resolve os B-rolls (ver "Assets").
+5. `npm start` (Studio) e `npm run render` (H.264, CRF 18).
 
-## O ESTILO (extraído de 3 vídeos de referência)
+---
 
-### 1. Base: talking head
-- Pessoa em plano médio, enquadrada no centro/terço superior, ocupando o vídeo inteiro (9:16).
-- **Nunca fica estática**: há um zoom contínuo muito lento (scale 1.00 → 1.06 ao longo de cada bloco) mesmo sem punch-in.
-- **Punch-ins de ênfase**: em palavras/frases-chave, corte seco ou zoom rápido para **1.15–1.35x** (centrado no rosto, com leve offset para manter olhos no terço superior), segurando 0.6–2.0 s e voltando para 1.0–1.08x. Alternar entre 2–3 níveis de zoom (1.0 / 1.15 / 1.3) para simular "câmeras" diferentes e quebrar a monotonia. **Nunca dois punch-ins iguais seguidos.**
-- Easing do zoom: `Easing.bezier(0.22, 1, 0.36, 1)` (out-expo suave), 6–10 frames. Corte seco (0 frames) também permitido em frases de impacto — alterne.
-- Opcional: micro-shake de 2–3 frames em palavras de impacto; jump cuts removendo pausas > 0.35 s e "é...", "né", "ééé" (com crossfade de áudio de 2 frames).
+## O ESTILO
 
-### 2. B-roll / assets ilustrativos (o coração do estilo)
-Toda vez que o narrador cita algo **concreto e visualizável** (pessoa famosa, marca, objeto, lugar, época, número, ação, emoção), entra um asset ilustrando **exatamente naquele instante**. Cobertura alvo: **40–55% do tempo do vídeo** com B-roll; nenhum B-roll dura menos de 0.8 s nem mais de 3.5 s (média ~1.5–2 s).
+### 1. Talking head: 3 enquadramentos, troca por corte seco
+O bruto é UM plano. Simule 3 "câmeras" recortando/escalando o mesmo vídeo com **transform estático** (`scale` + `translate` constantes durante o trecho, sem interpolar):
+- **Aberto** — scale 1.00 (enquadramento original, com espaço vazio nas laterais). Padrão.
+- **Médio** — scale ~1.15–1.2, centrado no rosto.
+- **Fechado** — scale ~1.4–1.5, rosto no terço superior/centro, olhos numa linha estável.
+Regras:
+- **Nunca há zoom animado.** O scale muda de um valor para outro num único frame (corte).
+- Troca de enquadramento a cada **3–8 s**, sempre em pausa de respiração, fim de frase ou palavra de ênfase. Nunca repetir o mesmo enquadramento em dois cortes seguidos; nunca pular de aberto para aberto.
+- Manter o enquadramento pelo menos 2 s antes de trocar de novo (exceto dentro de trecho P&B, ver 5).
+- Corte de jump (remover pausas > 0.4 s e vícios "é…", "né") deve ser combinado com troca de enquadramento sempre que possível, para o jump cut parecer troca de câmera e não erro. Crossfade de áudio de 2 frames nos cortes.
+- Grade de cor leve no bruto (contraste +6–8%, vinheta 8–10%), sem alterar o look que já existe.
 
-Formas de entrada (alterne; não repita a mesma duas vezes seguidas):
-- **A) Tela cheia** (asset ocupa 1080x1920, cover), com Ken Burns sutil (scale 1.0→1.12, pan lento). Usado em fotos históricas, produtos, cenas de filme.
-- **B) Split superior** — asset ocupa ~55–60% superior, o narrador permanece na metade inferior, com **gradiente/máscara suave** (fade de 120 px) fundindo os dois, sem linha dura. Foi o formato mais usado na referência 1 (foto do fundador acima, pessoa abaixo).
-- **C) Card flutuante** — asset em cartão com **cantos arredondados (radius ~48px)**, ~85% da largura, centralizado, sobre **fundo preto** (ou o vídeo escurecido a 85% + blur), com sombra. Entra com `spring` (scale 0.85→1, damping 14) e sai com scale 1→0.95 + fade. Usado para clipes de filme/cenas/UGC (referência 2).
-- **D) Corte seco em tela cheia** com o asset em preto-e-branco/granulado para imagens históricas (referência 3: Michael Jordan em P&B).
-- **E) Infográfico/dado** — quando há número ou comparação (ex.: resultado de eleição, percentual): componente React animado (barras, contador, mapa), barras crescendo com spring, números com `interpolate` de contagem. Fundo escuro com leve gradiente azul-petróleo.
+### 2. B-roll: SEMPRE tela cheia, corte seco
+- **Não existe tela dividida, card, picture-in-picture, moldura ou cantos arredondados.** O asset ocupa 100% do quadro (`object-fit: cover`, 1920x1080), substituindo a imagem da pessoa; **o áudio dela continua**.
+- Entra e sai por corte, sem animação. Asset estático (foto) fica parado; clipe de vídeo toca normalmente (`OffthreadVideo`, `muted`).
+- Duração de cada B-roll: **0.8–3 s**. Cobertura total: ~25–40% do vídeo (ajustável em `plan.config.brollTarget`). Máx. 2 B-rolls seguidos sem voltar ao rosto por ≥ 1.5 s.
+- Dispara quando o narrador cita algo concreto e visualizável (pessoa, marca, produto, lugar, ano, objeto, cena, número em tela). Abstrações só ganham B-roll se houver metáfora visual clara. Melhor menos e certeiro do que muito e genérico.
+- Legenda **continua visível por cima do B-roll** (mesmo estilo, centralizada, sem depender de posição do rosto), com sombra suave para leitura.
+- Fotos históricas: opcionalmente P&B com grão leve. Sem outros efeitos.
+- Ao voltar da imagem para o rosto, retorna ao **mesmo enquadramento** de antes do B-roll, ou a outro enquadramento diferente (por corte). Nunca ao mesmo enquadramento duas vezes seguidas com B-roll no meio sem motivo.
 
-Tratamentos visuais nos assets:
-- Fotos antigas: dessaturar 100%, contraste +10%, grain overlay (PNG de ruído a 8–12% opacity, mix-blend `overlay`), leve vinheta.
-- Clipes de vídeo: `<OffthreadVideo muted>` com `startFrom` no melhor trecho; sem áudio próprio (o áudio do narrador domina).
-- Transição de entrada/saída: **corte seco + 4–6 frames de scale-in (1.08→1.0)**. Ocasionalmente whip/glitch RGB-split de 3 frames em momentos de virada. **Sem** dissolves longos, sem wipes cafonas.
-- Ao entrar o B-roll, o áudio do narrador **não** pode ser interrompido; opcional: SFX curtíssimo (whoosh -18 dB) em ~30% das entradas, nunca em todas.
+### 3. Legendas: palavra a palavra, posicionadas com intenção
+Referência: a legenda **não fica travada embaixo**. Ela é posicionada no quadro a cada bloco.
+- Blocos de **1–4 palavras** (frase curta), alinhados ao ritmo da fala. Nunca linha longa. Uma linha só.
+- **Fonte**: sans neutra/grotesca em negrito (Inter ou similar), ~40–46 px em 1080p, branca, **tracking bem apertado (-0.03em)**, sombra suave `0 2px 10px rgba(0,0,0,.5)`. Caixa normal.
+- **Posição por bloco** (campo `slot`), alternando de forma natural:
+  - `chest` — abaixo do queixo, sobre o peito (padrão, ~50% dos blocos).
+  - `left` / `right` — **no espaço vazio lateral** ao lado do rosto/ombro, na altura do rosto ou levemente abaixo (aproveita o espaço horizontal da referência).
+  - `center` — centro da tela (usado sobre B-roll).
+  - Regras: **nunca cobrir olhos e boca**; usar as zonas de `framing.json` (mudam a cada enquadramento, pois o rosto se move quando escala); mesma posição pode repetir 2–3 blocos seguidos, depois muda; trocar de lado com a fala/gesto (ex.: quando ele aponta ou olha para um lado).
+  - Alinhamento coerente com o lado (texto à esquerda alinha à direita do bloco perto do rosto, etc.).
+- **Revelar palavra**: as palavras do bloco aparecem **no frame exato em que são faladas** (corte, sem fade, sem movimento). Opcional: as palavras ainda não faladas do bloco ficam visíveis em cinza (~35% de opacidade) e acendem em branco quando ditas (como "as pessoas amam **comprar**" na referência). Configurável (`captionReveal: "cut" | "dim-ahead"`).
+- **Variante espaçada** (rara, ≤ 1 a cada ~20 s, só em frases de efeito): as palavras do bloco ficam **distantes umas das outras** ("O ······ SEU ······ PRODUTO"), distribuídas na largura, ainda aparecendo no tempo da fala.
+- **Variante serifa** (rara, ≤ 3 por vídeo, frase de impacto curta): serifa condensada em **caixa alta** (Playfair Display / Bodoni Moda / Cormorant), branca, ~48–64 px, tracking apertado. Corte seco.
+- Sincronia: cada palavra em `startMs` do Whisper com adiantamento de 1–2 frames. Nada atrasado.
 
-Regra de alternância: nunca mais de 2 B-rolls consecutivos sem voltar ao rosto por ≥ 1.2 s. O rosto precisa "respirar".
+### 4. Frase de destaque em fundo preto (MÁX. 1 POR VÍDEO)
+Só usar se houver uma frase realmente impactante/central (tese, virada, gancho, o "print" do vídeo). Se nada merecer, **não use nenhuma**. Nunca mais de uma.
+- Corte seco para **fundo preto** (#0B0809 levemente quente, não #000 puro), ocupando 100% do quadro por **1.5–4 s**, **sem imagem da pessoa** (o áudio segue).
+- Texto centralizado, **sans negrito minúscula ou serifa condensada**, tamanho grande (~72–110 px), com **glow suave** branco/laranja-quente (`text-shadow: 0 0 6px #fff, 0 0 22px rgba(255,120,60,.7)`), tracking apertado.
+- As palavras entram **uma a uma no tempo da fala** (corte, sem movimento). Palavras ainda não ditas podem aparecer borradas/cinza-escuras e nítidas ao serem ditas (blur 8px→0 em 3 frames no máximo; sem escala, sem deslocamento). Se ficar animado demais, use só corte.
+- Uma palavra-chave da frase pode ir em **serifa condensada caixa alta na cor laranja-avermelhada (#FF4A1C)** com glow, maior que o resto (como "MEU" / "SEU PRODUTO" na referência), aparecendo em corte.
+- Volta ao vídeo por corte, em enquadramento diferente do anterior ao cartão.
 
-### 3. Legendas (palavra-a-palavra, centralizadas)
-Sempre presentes, gerar a partir de `captions.json`. Duas variantes; escolha via prop `captionStyle`:
+### 5. Trechos em preto e branco (dramatização de um trecho da fala)
+Usados para dar peso a uma afirmação, virada ou tom de brincadeira/ironia. Frequência: 1–3 por vídeo, 2–6 s cada.
+- **Entra junto com um corte de enquadramento**: o P&B começa no mesmo frame em que o enquadramento muda para um mais **fechado OU mais aberto** que o anterior (sempre diferente do que vinha antes).
+- **Termina com corte de volta ao enquadramento anterior** ao trecho P&B (o mesmo scale/translate de antes), reforçando a divisão entre o trecho P&B e o resto.
+- Dentro do P&B pode haver, no máximo, mais uma troca de enquadramento.
+- Tratamento: dessaturação 100%, contraste +12–15%, grão leve, vinheta um pouco mais forte. Sem transição (é corte).
+- **Legenda em VERMELHO** durante todo o trecho P&B (`#E5171B`, mantém sombra escura fina para leitura), mesma tipografia e posicionamento do resto. Volta ao branco no corte de saída.
+- Nunca combinar P&B com B-roll ou cartão preto no mesmo trecho.
 
-**`"clean"` (referências 1 e 2)**
-- 1–3 palavras por vez (nunca linha completa), **centralizadas no meio da tela** (y ≈ 55–62%, sobre o peito/abaixo do queixo, nunca cobrindo os olhos).
-- Fonte sans geométrica moderna, peso 600–700 (ex.: *Poppins*, *Montserrat* ou *Outfit* via `@remotion/google-fonts`), caixa normal/minúscula, ~54–64 px, branca, sombra suave (`0 2px 12px rgba(0,0,0,.55)`), tracking levemente negativo.
-- Aparição por `spring` rápido: opacity 0→1 + translateY 12→0 + scale 0.92→1 em ~5 frames. Troca de palavra em corte.
+### 6. Outros
+- Sem logotipos, barras, emojis, stickers, molduras, ícones animados. Limpo, escuro, cinematográfico.
+- SFX e música: só se eu fornecer `public/music.mp3` / `public/sfx/`. Música a -28 dB com ducking sob a voz; SFX só em cartão preto e P&B, muito discretos, opcionais.
+- Áudio: normalizar para -14 LUFS.
 
-**`"cinema"` (referência 3)**
-- 2–4 palavras por vez, centro-inferior, itálico/serif ou sans pequeno (~44 px), **cor âmbar/dourada (#F2B441)** com contorno preto fino (stroke 3 px) — sensação de legenda de filme.
-
-**Palavra de ênfase (destaque)** — 1 a cada ~8–12 s no máximo:
-- Substantivos-chave/valor emocional. Renderizar **muito maior (140–220 px), caixa alta, negrito 800–900**, centralizada, com cor de destaque (vermelho #FF1E1E com glow `text-shadow: 0 0 24px #ff1e1e` — exemplo "ALUMÍNIO" na ref. 1) **ou** fonte script/itálica rosa-chiclete misturada com a sans (ex.: "Feed" em script rosa, ref. 2).
-- Entrada: scale 1.6→1.0 com spring bounce curto + leve blur→0. Saída em corte.
-- Mistura de tipografias dentro da mesma frase é permitida, **apenas na palavra de ênfase**.
-
-Sincronia: cada palavra aparece exatamente em `startMs` do Whisper (com offset de -2 frames para antecipar). Nada de legenda atrasada.
-
-### 4. Cor e finalização
-- Color grade cinematográfico leve no talking head: contraste +8%, saturação -5%, tons quentes nas médias, vinheta 10%. (`filter` CSS ou LUT via canvas.)
-- Momentos de virada narrativa (ex.: "mas foi aí que…"): trecho de 2–4 s em **P&B contrastado** do próprio narrador (ref. 3).
-- Sem logotipos, sem barras, sem emojis, sem stickers. Limpo, editorial, premium.
-- Áudio: normalizar para -14 LUFS; música de fundo opcional (instrumental discreta) a -28 dB com ducking sob a voz. Só se eu fornecer `public/music.mp3`.
+---
 
 ## COMO DECIDIR A EDIÇÃO (etapa `plan`)
-Leia a transcrição e, para cada frase, classifique:
-1. **Entidade visualizável?** (pessoa, marca, produto, lugar, ano, cena) → `broll` com `query` de busca em **inglês e específica** (ex.: "Walt Disney 1950s black and white portrait", "Rimowa aluminum suitcase", "Michael Jordan North Carolina 1982").
-2. **Número/comparação?** → `broll` do tipo `infographic`.
-3. **Ideia central / gancho / virada / CTA?** → `zoom` de ênfase e, se couber, `emphasisWord`.
-4. **Abstração** (emoção, conceito) → asset metafórico (ex.: "dissociação" → pessoa olhando pro celular, "zumbi" → cena de zumbi).
-5. **Pausas e vícios de linguagem** → `cut`.
-
-Ritmo: uma mudança visual (zoom, B-roll ou corte) **a cada 1.5–3 s**. Os primeiros 3 segundos precisam ter pelo menos 1 punch-in e 1 B-roll (gancho). Últimos 3 s: rosto limpo + legenda do CTA.
+Leia a transcrição inteira e, para cada frase, classifique:
+1. **Entidade visualizável** → `broll` com `query` específica em inglês (ex.: "Rimowa aluminum suitcase", "Walt Disney 1950s portrait").
+2. **Frase-tese / gancho / virada** → candidata a destaque preto (escolha **uma no máximo**, a melhor) ou a troca de enquadramento para fechado.
+3. **Afirmação forte, ironia, "plot twist"** → candidata a trecho P&B (com troca de enquadramento).
+4. **Mudança de assunto / respiração** → troca de enquadramento (aberto ↔ médio ↔ fechado).
+5. **Pausas e vícios** → `cuts`.
+Ritmo: alguma mudança visual (enquadramento, B-roll, cartão, P&B) a cada **3–6 s**. Primeiros 3 s: já com um enquadramento definido e legenda; um B-roll ou destaque no início só se for natural (gancho).
 
 ### Schema `edit-plan.json`
 ```ts
 type Plan = {
-  captionStyle: "clean" | "cinema";
-  cuts: { fromMs: number; toMs: number }[];           // trechos removidos
-  zooms: { atMs: number; durMs: number; scale: number; focusX?: number; focusY?: number; easing?: "smooth" | "cut" }[];
-  broll: {
-    startMs: number; endMs: number;
-    layout: "full" | "splitTop" | "card" | "infographic";
-    source: { type: "image" | "video" | "component"; query?: string; path?: string; component?: string; props?: any };
-    treatment?: "none" | "bw" | "grain";
-    kenBurns?: boolean;
-    sfx?: boolean;
-    reason: string;                                    // 1 linha: por que esse asset aqui
-  }[];
-  emphasis: { atMs: number; durMs: number; text: string; variant: "red-glow" | "script-pink" | "white-bold" }[];
-  bwSegments: { fromMs: number; toMs: number }[];
+  config: { captionReveal: "cut" | "dim-ahead"; brollTarget: [number, number] };
+  cuts: { fromMs: number; toMs: number }[];
+  framings: { fromMs: number; toMs: number; shot: "wide" | "medium" | "close" }[]; // troca = corte seco
+  broll: { startMs: number; endMs: number; source: { type: "image" | "video"; query?: string; path?: string }; treatment?: "none" | "bw"; reason: string }[];
+  bw: { fromMs: number; toMs: number }[];                 // legenda vermelha nesses trechos
+  blackCard: null | {                                     // máx. 1
+    startMs: number; endMs: number; text: string;
+    keyword?: { word: string; style: "serif-orange" };
+    reveal: "word-by-word" | "cut";
+  };
+  captions: { startMs: number; endMs: number; words: { text: string; startMs: number }[];
+              slot: "chest" | "left" | "right" | "center"; variant?: "default" | "spaced" | "serif" }[];
 };
 ```
+Validações automáticas (falhar o `plan` se quebrar): `blackCard` ≤ 1; nenhum `framings` consecutivo igual; todo `bw` começa/termina em fronteira de `framings`; enquadramento pós-`bw` = enquadramento pré-`bw`; nenhum B-roll < 0.8 s; nenhuma legenda em `left/right` que invada `faceZone`.
 
 ## ASSETS
-- Ordem de busca: (1) `public/assets-library/` do usuário, (2) Pexels/Pixabay/Unsplash API (vídeos e fotos, chaves em `.env`), (3) Wikimedia Commons para fotos históricas/pessoas públicas, (4) geração de imagem por API, se configurada, para conceitos abstratos.
-- Baixar em resolução ≥ 1080 px no lado menor; converter vídeos para H.264 30 fps (ffmpeg) para evitar travadas no Remotion.
-- Registrar em `assets/credits.json` a origem e a licença de cada asset. **Não usar** imagens de terceiros com direitos restritos sem sinalizar isso no relatório final.
-- Se nenhum asset bom for encontrado, **não invente**: deixe um card placeholder com o texto da `query` e liste no relatório para eu fornecer manualmente.
+- Ordem: (1) `public/assets-library/` (meus arquivos), (2) Pexels/Pixabay/Unsplash (chaves em `.env`), (3) Wikimedia Commons para fotos históricas/pessoas públicas.
+- Baixar ≥ 1920 px no lado maior; converter clipes para H.264 30 fps.
+- Registrar origem e licença em `assets/credits.json`. **Não invente** asset: se não achar, deixe placeholder com a `query` na tela e liste no relatório. Sinalizar imagens sem licença clara (fotos de arquivo de terceiros, cenas de filmes/séries, marcas).
 
-## ESTRUTURA DE CÓDIGO ESPERADA
+## ESTRUTURA
 ```
 src/
-  Root.tsx                 // <Composition> + calculateMetadata
-  Edit.tsx                 // lê edit-plan.json, monta camadas
-  layers/
-    TalkingHead.tsx        // OffthreadVideo + zoom contínuo + punch-ins + grade + B&W
-    BRoll.tsx              // layouts full / splitTop / card
-    Infographic.tsx        // barras, contadores, mapa
-    Captions.tsx           // clean | cinema
-    Emphasis.tsx           // palavra gigante
-    Grain.tsx              // overlay de grão/vinheta
-  lib/zoom.ts              // resolve scale/translate em qualquer frame a partir de plan.zooms
-  lib/timing.ts            // ms→frames, aplicar cuts (remapear timeline)
-scripts/ transcribe.ts  plan.ts  fetch-assets.ts
+  Root.tsx  Edit.tsx
+  layers/ TalkingHead.tsx  BRoll.tsx  Captions.tsx  BlackCard.tsx  BwGrade.tsx
+  lib/ shots.ts (wide/medium/close → scale/translate estáticos)  timing.ts (ms→frames, cuts)  safeZones.ts
+scripts/ transcribe.ts  framing.ts  plan.ts  fetch-assets.ts
 edit-plan.example.json
 ```
-Use `<Sequence>` com `premountFor` em todos os B-rolls para evitar flash de carregamento. Nada de `useCurrentFrame` fora de componentes filhos de `Sequence` quando puder evitar.
+`<Sequence premountFor={30}>` em todo B-roll. Cada mudança visual é uma `Sequence` própria (corte), nunca uma interpolação.
 
-## CRITÉRIOS DE ACEITE (verifique antes de dizer "pronto")
-- [ ] Renderiza sem erro; `npx remotion still` de 6 frames espalhados mostra os 4 layouts.
-- [ ] Legenda em sincronia (±2 frames) e nunca cobre os olhos.
-- [ ] Cobertura de B-roll entre 40% e 55%; sem B-roll < 0.8 s.
-- [ ] Nenhuma mudança visual espaçada por mais de ~3.5 s.
-- [ ] Nenhum layout de B-roll repetido 3× seguidas.
-- [ ] Todo asset tem `reason` e entrada em `credits.json`.
-- [ ] Relatório final: lista de B-rolls (timestamp, query, fonte, licença) + placeholders pendentes.
+## CRITÉRIOS DE ACEITE
+- [ ] Nenhum `spring`, nenhum scale/translate/opacity animado, exceto o fade ≤3 frames do cartão preto e o blur-reveal opcional.
+- [ ] Trocas de enquadramento são cortes de 1 frame; nunca zoom animado.
+- [ ] B-rolls todos em tela cheia; nenhum split.
+- [ ] No máximo 1 cartão preto (pode ser 0).
+- [ ] Todo trecho P&B: entra e sai em corte de enquadramento, volta ao enquadramento anterior, legenda vermelha.
+- [ ] Legendas usam `left/right` quando há espaço; nunca cobrem olhos/boca; sincronia ±2 frames.
+- [ ] `npx remotion still` de 8 frames espalhados: mostra aberto/médio/fechado, B-roll, P&B com legenda vermelha, e cartão preto (se houver).
+- [ ] Relatório final: lista de B-rolls (tempo, query, fonte, licença), placeholders pendentes, decisão sobre o cartão preto (qual frase e por quê, ou por que nenhuma).
 
 ## PRIMEIRO PASSO
-Não escreva tudo de uma vez. Ordem: (1) scaffold + `TalkingHead` com zoom, (2) `Captions` clean, (3) transcrição real, (4) `BRoll` layouts com assets de teste, (5) `plan` automático, (6) polimento. Depois de cada etapa, renderize um trecho de 10 s e me mostre. Comece pedindo o arquivo de vídeo e o tema, se ainda não estiver em `public/`.
+Não faça tudo de uma vez. Ordem: (1) scaffold + `TalkingHead` com 3 enquadramentos por corte, (2) `Captions` com slots, (3) transcrição real, (4) `BRoll` tela cheia, (5) P&B + legenda vermelha, (6) cartão preto, (7) `plan` automático, (8) polimento. Após cada etapa, renderize 10 s e me mostre. Comece confirmando que `public/input.mp4` existe.
