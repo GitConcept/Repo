@@ -6,7 +6,7 @@ Referência de estilo: `REFERENCIA_4.mp4` (colocar em `reference/` para consulta
 ---
 
 ## PAPEL
-Você é um editor de vídeo sênior e engenheiro Remotion. Vou fornecer um vídeo bruto horizontal de uma pessoa falando para a câmera. Entregue uma composição Remotion que o transforma em um vídeo editado no estilo abaixo, de forma **automatizada e parametrizável**: transcrição → plano de edição (JSON) → render.
+Você é um editor de vídeo sênior e engenheiro Remotion. Vou fornecer vídeos brutos horizontais que são **gravações de videochamada** (webcam, 1920x1080, 25 fps), com o apresentador falando e, em alguns trechos, um segundo participante (entrevistador) que aparece quando fala ou reage. Entregue uma composição Remotion que o transforma em um vídeo editado no estilo abaixo, de forma **automatizada e parametrizável**: transcrição → plano de edição (JSON) → render.
 
 ## FILOSOFIA DE EDIÇÃO (leia antes de tudo)
 **Seco e direto. Tudo é corte.** Simula a troca de câmera e a montagem de um editor humano, não um template de motion graphics.
@@ -16,14 +16,25 @@ Você é um editor de vídeo sênior e engenheiro Remotion. Vou fornecer um víd
 - Nenhum elemento usa `spring()`. Use `interpolate` somente para o fade citado e para o revelar de palavra descrito em 3.
 
 ## ESPECIFICAÇÕES TÉCNICAS
-- Composição **horizontal 1920x1080, 30 fps** (a referência é 1276x718 a ~24 fps; o bruto pode variar: use `calculateMetadata` para ler resolução/fps/duração do arquivo e ajustar; se o bruto for 4K, renderizar em 1920x1080).
+- Composição **horizontal 1920x1080, no fps do bruto** (os brutos enviados são 25 fps; **não converter para 30**). Use `calculateMetadata` para ler resolução/fps/duração do arquivo.
 - Vídeo bruto em `public/input.mp4` via `<OffthreadVideo>`. Áudio original sempre mantido.
 - Stack: Remotion 4.x, TS, `@remotion/captions`, `@remotion/google-fonts`, `@remotion/install-whisper-cpp`.
 - Toda a edição é dirigida por **`edit-plan.json`**. Componentes só renderizam o plano; nenhum tempo hard-coded.
 
+## O BRUTO REAL (analisado nos 4 cortes enviados: 55 s, 65 s, 82 s e 79 s)
+Isto muda partes do que vem depois. Trate como regras, não como sugestão:
+1. **É videochamada, não câmera de estúdio.** Luz chapada, sala clara e branca. A referência é escura, quente, com contraste. Portanto o **color grade é obrigatório e forte** (ver 1): escurecer, contraste, tons quentes nas médias, vinheta. Sem grade o resultado não parece a referência, mesmo com o resto perfeito.
+2. **Há uma etiqueta com o nome do participante no canto inferior esquerdo** (ex.: "Gabriel Magela", "cabine branca") e uma leve faixa escura embaixo. **Precisa sumir em todo o vídeo.** O enquadramento "aberto" não pode ser 1.00: use no mínimo **scale 1.10 ancorado no canto superior direito** (`transform-origin: top right`), que corta a etiqueta. Depois do corte, confirmar em imagem que a etiqueta não aparece em nenhum frame de nenhum enquadramento.
+3. **Dois participantes.** O apresentador é o "principal" (quase todo o tempo). O segundo aparece em trechos curtos (em um dos cortes, ~9 s dispersos), em sala escura com outra câmera. Tratar como **outra câmera**: detectar a troca de pessoa (mudança brusca de brilho/cena), rastrear o rosto de cada um separadamente, aplicar os mesmos 3 enquadramentos de forma independente, legendar a fala dele também e **não** aplicar o grade do apresentador em cima do dele sem ajustar (a sala dele já é escura: grade mais leve, casando o look). Trocas de pessoa contam como troca de plano; não empilhar troca de enquadramento no mesmo frame da troca de pessoa.
+4. **O rosto se move bastante dentro do quadro** (centro horizontal do rosto varia de ~740 a ~1300 px em 1920; vertical de ~410 a ~670). **Uma caixa de rosto fixa por enquadramento NÃO serve.** Rastrear o rosto **frame a frame**, com suavização (média móvel ~5 frames, sem tremor), e usar a posição real no frame corrente para: (a) centralizar os enquadramentos médio e fechado (transform estático por trecho, calculado pela posição média do rosto naquele trecho, para o rosto nunca sair do quadro nem ficar cortado); (b) calcular a zona proibida das legendas naquele instante.
+5. **Detecção**: o detector simples que testei (Haar) achou o rosto em ~95–100% dos frames, mas falha com a cabeça baixa/virada e o retângulo cobre só olhos-boca-queixo, **sem testa e cabelo**. Use detector melhor (MediaPipe Face Detection/Face Mesh) e **expanda a zona proibida** ~35% para cima (testa/cabelo) e ~15% nas laterais e embaixo. Nos frames sem detecção, interpolar entre os vizinhos.
+6. **Mãos ocupam o espaço lateral** (ele gesticula muito com as duas mãos abertas). A legenda lateral deve fugir das mãos: se possível detectar mãos (MediaPipe Hands) e tratá-las como zona de baixa prioridade; se não, preferir o lado oposto ao da mão em movimento.
+7. **Qualidade**: 1080p de webcam, um pouco suave. O enquadramento **fechado não passa de scale 1.4** (acima disso vira imagem mole). Aplicar um leve sharpen (unsharp 0.3) e grão fino no final para disfarçar.
+8. **Dimensões do rosto**: o rosto do apresentador ocupa ~28–31% da altura do quadro no aberto. No fechado (1.4x) chega a ~42%; cuidado para o topo da cabeça não sair do quadro (ancorar o corte para manter ≥ 6% de folga acima do cabelo).
+
 ## PIPELINE (scripts npm)
 1. `npm run transcribe` — extrai áudio (ffmpeg), transcreve com timestamps **por palavra** (Whisper, `pt`, modelo `medium` ou maior) → `public/captions.json`. Revisar a transcrição (nomes próprios, marcas) antes do passo 2.
-2. `npm run framing` — detecta o rosto num frame do bruto (MediaPipe/face-api ou me peça as coordenadas) e grava `framing.json`: bbox do rosto, e as **zonas seguras** de texto (`faceZone`, `leftSpace`, `rightSpace`, `chestZone`) para cada enquadramento (ver 1).
+2. `npm run framing` — **rastreia o rosto frame a frame** (MediaPipe) para cada participante, detecta trocas de pessoa, e grava `framing.json` com, por frame: bbox do rosto suavizada, `faceZone` (bbox expandida como em "O BRUTO REAL" item 5), espaço livre à esquerda/direita, e, por trecho de enquadramento, o transform (scale + translate) que mantém o rosto bem enquadrado.
 2b. **Verificação do rosto (obrigatória, o usuário não é técnico)** — depois do `framing`, gere `verify/framing-wide.png`, `framing-medium.png` e `framing-close.png`: um frame real do bruto em cada enquadramento com um **retângulo vermelho desenhado sobre o rosto** e a `faceZone` (com margem) em amarelo. Mostre as 3 imagens e pergunte só: "O retângulo vermelho está cobrindo o rosto inteiro (testa ao queixo) nos 3 enquadramentos? Sim/Não". Só siga para o passo 3 com "Sim". Se "Não", corrija as coordenadas e gere de novo. Explique tudo em português simples, sem jargão.
    Além disso, teste automático: para o vídeo inteiro, verificar em **todos os frames** (não só amostras) que nenhum texto (legenda ou destaque) intersecta a `faceZone` do enquadramento ativo naquele frame. Se houver colisão, corrigir a posição e repetir. Ao final do render, gerar `verify/legendas-amostra.png`: 12 frames aleatórios do vídeo final em grade, para eu olhar e aprovar visualmente.
 3. `npm run plan` — gera `edit-plan.json` a partir da transcrição (ver "Como decidir a edição").
@@ -36,15 +47,15 @@ Você é um editor de vídeo sênior e engenheiro Remotion. Vou fornecer um víd
 
 ### 1. Talking head: 3 enquadramentos, troca por corte seco
 O bruto é UM plano. Simule 3 "câmeras" recortando/escalando o mesmo vídeo com **transform estático** (`scale` + `translate` constantes durante o trecho, sem interpolar):
-- **Aberto** — scale 1.00 (enquadramento original, com espaço vazio nas laterais). Padrão.
+- **Aberto** — scale **1.10** ancorado no canto superior direito (esconde a etiqueta de nome; ver "O BRUTO REAL" item 2), com o rosto ainda pequeno e espaço vazio nas laterais. Padrão.
 - **Médio** — scale ~1.15–1.2, centrado no rosto.
-- **Fechado** — scale ~1.4–1.5, rosto no terço superior/centro, olhos numa linha estável.
+- **Fechado** — scale ~1.35–1.4 (máx. 1.4 pela qualidade da webcam), rosto no terço superior/centro, olhos numa linha estável.
 Regras:
 - **Nunca há zoom animado.** O scale muda de um valor para outro num único frame (corte).
 - Troca de enquadramento a cada **3–8 s**, sempre em pausa de respiração, fim de frase ou palavra de ênfase. Nunca repetir o mesmo enquadramento em dois cortes seguidos; nunca pular de aberto para aberto.
 - Manter o enquadramento pelo menos 2 s antes de trocar de novo (exceto dentro de trecho P&B, ver 5).
 - Corte de jump (remover pausas > 0.4 s e vícios "é…", "né") deve ser combinado com troca de enquadramento sempre que possível, para o jump cut parecer troca de câmera e não erro. Crossfade de áudio de 2 frames nos cortes.
-- Grade de cor leve no bruto (contraste +6–8%, vinheta 8–10%), sem alterar o look que já existe.
+- **Color grade cinematográfico obrigatório** (o bruto é claro e chapado; a referência é escura e quente): exposição -0.5 a -0.8 EV, contraste +15–20%, sombras profundas, brancos levemente reduzidos (parede branca não pode estourar), realces e tons médios quentes (âmbar/laranja suave), saturação -10%, vinheta 15–20% mais forte nos cantos, grão fino. Implementar como filtro CSS/SVG (`brightness`, `contrast`, `sepia` parcial, `hue-rotate`, overlay de degradê radial) ou LUT em canvas; parametrizado em `config.grade` para eu ajustar. Se ficar sujo/artificial, priorizar escurecer e vinhetar em vez de mais cor.
 
 ### 2. B-roll: SEMPRE tela cheia, corte seco
 - **Não existe tela dividida, card, picture-in-picture, moldura ou cantos arredondados.** O asset ocupa 100% do quadro (`object-fit: cover`, 1920x1080), substituindo a imagem da pessoa; **o áudio dela continua**.
@@ -151,6 +162,7 @@ edit-plan.example.json
 `<Sequence premountFor={30}>` em todo B-roll. Cada mudança visual é uma `Sequence` própria (corte), nunca uma interpolação.
 
 ## CRITÉRIOS DE ACEITE
+- [ ] Etiqueta de nome da videochamada invisível em todos os frames; grade de cor aplicado; sem tremor de rosto; troca de participante tratada como troca de câmera.
 - [ ] Nenhum `spring`, nenhum scale/translate/opacity animado, exceto o fade ≤3 frames do cartão preto e o blur-reveal opcional.
 - [ ] Trocas de enquadramento são cortes de 1 frame; nunca zoom animado.
 - [ ] B-rolls todos em tela cheia; nenhum split.
